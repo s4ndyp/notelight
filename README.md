@@ -7,16 +7,20 @@ PocketBase-app voor registraties met bijlagen.
 - Docker (of Docker Compose)
 - PocketBase **≥ 0.23** (de UI gebruikt `bijlage+` / `bijlage-` bij het bijwerken van bestanden)
 
-## Lokaal met Docker Compose
+## Docker Compose / Dockhand
+
+`docker-compose.yml` mapte hostpoort **8084** naar containerpoort **8080**.
 
 ```bash
-docker compose up --build
+docker compose up -d --build
 ```
 
-App: http://localhost:8080  
-Admin: http://localhost:8080/_/
+App: http://localhost:8084  
+Admin: http://localhost:8084/_/
 
-Data en bijlagen blijven bewaard in het Docker-volume `notelight_data` (`/pb/pb_data`).
+In Dockhand: stack aanmaken met deze compose-file (uit Git of geplakt). Poortbadge **8084** opent de app.
+
+Data en bijlagen blijven bewaard in het volume `notelight_data` (`/pb/pb_data`).
 
 ## Belangrijk bij deploy
 
