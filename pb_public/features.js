@@ -97,6 +97,46 @@
         btn.textContent = state.loadingMore ? 'Laden...' : 'Meer laden';
     }
 
+    function withFallbackSort(options, fallbackSort) {
+        const next = { ...options };
+        if (fallbackSort) next.sort = fallbackSort;
+        else delete next.sort;
+        return next;
+    }
+
+    async function getListSafe(pb, collection, page, perPage, options) {
+        try {
+            return await pb.collection(collection).getList(page, perPage, options);
+        } catch (error) {
+            if (!options?.sort) throw error;
+            // Older/custom schemas may miss autodate fields like created/updated.
+            console.warn('Sort mislukt, probeer fallback:', options.sort, error);
+            try {
+                return await pb
+                    .collection(collection)
+                    .getList(page, perPage, withFallbackSort(options, '-id'));
+            } catch (error2) {
+                return await pb
+                    .collection(collection)
+                    .getList(page, perPage, withFallbackSort(options, null));
+            }
+        }
+    }
+
+    async function getFullListSafe(pb, collection, options) {
+        try {
+            return await pb.collection(collection).getFullList(options);
+        } catch (error) {
+            if (!options?.sort) throw error;
+            console.warn('Sort mislukt bij full list, probeer fallback:', options.sort, error);
+            try {
+                return await pb.collection(collection).getFullList(withFallbackSort(options, '-id'));
+            } catch (error2) {
+                return await pb.collection(collection).getFullList(withFallbackSort(options, null));
+            }
+        }
+    }
+
     async function fetchDataEnhanced({ append = false, showOverlay = true } = {}) {
         const c = core();
         if (!c?.pb) {
@@ -130,9 +170,13 @@
             };
             if (finalFilter) listOptions.filter = finalFilter;
 
-            const resultList = await pb
-                .collection(COLLECTION_NAME)
-                .getList(state.page, state.pageSize, listOptions);
+            const resultList = await getListSafe(
+                pb,
+                COLLECTION_NAME,
+                state.page,
+                state.pageSize,
+                listOptions
+            );
 
             state.totalItems = resultList.totalItems;
             state.hasMore = resultList.page < resultList.totalPages;
@@ -202,24 +246,18 @@
             };
             if (finalFilter) options.filter = finalFilter;
 
-            const items = await pb.collection(COLLECTION_NAME).getFullList(options);
-            const headers = [
-                'id',
-                'titel',
-                'status',
-                'prio',
-                'soort',
-                'kenmerk',
-                'dataset',
-                'betrokkene',
-                'omschrijving',
-                'bijlage',
-                'created',
-                'updated',
-            ];
+            const items = await getFullListSafe(pb, COLLECTION_NAME, options);
+            const exportCols = (state.columns || []).filter((col) => col.visible);
+            if (!exportCols.length) {
+                showToast('Export', 'Geen kolommen geselecteerd voor weergave.', 'error');
+                return;
+            }
+
+            const headers = exportCols.map((col) => col.label || col.id);
+            const keys = exportCols.map((col) => col.id);
 
             const rows = items.map((record) =>
-                headers
+                keys
                     .map((key) => {
                         if (key === 'bijlage') {
                             const files = Array.isArray(record.bijlage)
@@ -234,7 +272,7 @@
                     .join(',')
             );
 
-            const csv = `\uFEFF${headers.join(',')}\n${rows.join('\n')}`;
+            const csv = `\uFEFF${headers.map(csvEscape).join(',')}\n${rows.join('\n')}`;
             const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
@@ -248,7 +286,7 @@
 
             showToast(
                 'Export klaar',
-                `${items.length} record${items.length === 1 ? '' : 's'} geëxporteerd (CSV/Excel).`,
+                `${items.length} record${items.length === 1 ? '' : 's'} · ${exportCols.length} kolom${exportCols.length === 1 ? '' : 'men'} geëxporteerd (CSV/Excel).`,
                 'success'
             );
         } catch (error) {
@@ -259,8 +297,23 @@
         }
     }
 
+    function appPathname() {
+        // PocketBase redirects /index.html -> / and drops the query string.
+        // Always use "/" (or directory path) for shareable deep links.
+        let path = window.location.pathname || '/';
+        if (path.endsWith('/index.html')) {
+            path = path.slice(0, -'index.html'.length) || '/';
+        }
+        if (!path.endsWith('/')) {
+            // keep directory URLs as-is; root stays "/"
+            if (path === '') path = '/';
+        }
+        return path === '' ? '/' : path;
+    }
+
     function setRecordUrl(id) {
         const url = new URL(window.location.href);
+        url.pathname = appPathname();
         if (id) url.searchParams.set('id', id);
         else url.searchParams.delete('id');
         history.replaceState(null, '', url.pathname + url.search + url.hash);
@@ -273,6 +326,8 @@
         const params = new URLSearchParams(window.location.search);
         const id = params.get('id');
         if (!id) return;
+        // Normalize URL away from /index.html so later edits keep the id.
+        setRecordUrl(id);
 
         try {
             const existing = c.state.records.find((r) => r.id === id);
@@ -571,12 +626,63 @@
         }
     }
 
+    function ensureChoicePromptModal() {
+        let modal = document.getElementById('choice-add-modal');
+        if (modal) return modal;
+
+        modal = document.createElement('div');
+        modal.id = 'choice-add-modal';
+        modal.className = 'modal-backdrop hidden';
+        modal.setAttribute('role', 'dialog');
+        modal.setAttribute('aria-modal', 'true');
+        modal.innerHTML = `
+            <div class="modal-panel" style="width:min(28rem,100%);max-height:none;">
+                <div class="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-800">
+                    <h2 id="choice-add-title" class="text-lg font-semibold text-white">Nieuwe keuze</h2>
+                    <button type="button" id="choice-add-close" class="text-gray-500 hover:text-white transition-colors p-1" title="Sluiten">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+                <form id="choice-add-form" class="p-5 space-y-3">
+                    <label class="block text-sm text-gray-300" for="choice-add-input">Waarde</label>
+                    <input id="choice-add-input" type="text" required autocomplete="off" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Nieuwe waarde...">
+                    <div class="flex gap-2 pt-1">
+                        <button type="button" id="choice-add-cancel" class="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-sm py-2 rounded-lg">Annuleren</button>
+                        <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg">Toevoegen</button>
+                    </div>
+                </form>
+            </div>`;
+        document.body.appendChild(modal);
+
+        const close = () => {
+            modal.classList.add('hidden');
+            modal.dataset.categorie = '';
+        };
+        modal.addEventListener('click', (e) => {
+            if (e.target === modal) close();
+        });
+        modal.querySelector('#choice-add-close').addEventListener('click', close);
+        modal.querySelector('#choice-add-cancel').addEventListener('click', close);
+        modal.querySelector('#choice-add-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const categorie = modal.dataset.categorie;
+            const value = modal.querySelector('#choice-add-input').value;
+            close();
+            if (categorie) addKeuze(categorie, value, { selectAfter: true });
+        });
+        return modal;
+    }
+
     function promptAddKeuze(categorie) {
         const meta = CHOICE_CATEGORIES.find((item) => item.id === categorie);
         const label = meta?.label || categorie;
-        const value = prompt(`Nieuwe waarde voor ${label}:`);
-        if (value == null) return;
-        addKeuze(categorie, value, { selectAfter: true });
+        const modal = ensureChoicePromptModal();
+        modal.dataset.categorie = categorie;
+        modal.querySelector('#choice-add-title').textContent = `Nieuwe ${label.toLowerCase()}`;
+        const input = modal.querySelector('#choice-add-input');
+        input.value = '';
+        modal.classList.remove('hidden');
+        setTimeout(() => input.focus(), 0);
     }
 
     function renderKeuzelijstenModal() {

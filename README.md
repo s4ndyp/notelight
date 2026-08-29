@@ -45,6 +45,10 @@ Velden die de UI verwacht:
 | `dataset` | text | |
 | `betrokkene` | text | |
 | `bijlage` | file | multi, Max files ≥ 2 |
+| `created` | autodate | on create (nodig voor standaard sortering) |
+| `updated` | autodate | on create + update |
+
+> Tip: als je de collectie via de Admin-UI aanmaakt, voeg PocketBase `created`/`updated` meestal automatisch toe. Bij aanmaken via API moet je die autodate-velden zelf zetten.
 
 ### 2. `keuzelijsten` (nieuw — optie 7)
 
@@ -79,7 +83,7 @@ Zonder deze collectie blijven voorkeuren in `localStorage` van de browser.
 ## Nieuwe app-features
 
 - **Meer laden**: tabel laadt batches van 50 records; onderaan “Meer laden”.
-- **Exporteren**: CSV (Excel-vriendelijk, UTF-8 BOM) van de huidige zoek-/filterset.
+- **Exporteren**: CSV (Excel-vriendelijk, UTF-8 BOM) van de huidige zoek-/filterset; alleen kolommen die in de tabel zichtbaar zijn.
 - **Deep links**: `index.html?id=<recordId>` opent een record; galerij linkt door naar bewerken.
 - **Keuzelijsten**: zie hierboven.
 - **Voorkeuren sync**: zie hierboven.

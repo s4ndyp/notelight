@@ -283,7 +283,7 @@
 
             const title = record.titel?.trim() || 'Zonder titel';
             const meta = [record.soort, record.status].filter(Boolean).join(' · ');
-            const editUrl = `index.html?id=${encodeURIComponent(record.id)}`;
+            const editUrl = `/?id=${encodeURIComponent(record.id)}`;
 
             return `
                 <article class="gallery-group">
@@ -370,10 +370,24 @@
             gallerySummary.textContent = 'Bijlagen laden...';
 
             try {
-                const result = await pb.collection(COLLECTION_NAME).getList(1, 500, {
-                    sort: '-created',
-                    requestKey: null
-                });
+                let result;
+                try {
+                    result = await pb.collection(COLLECTION_NAME).getList(1, 500, {
+                        sort: '-created',
+                        requestKey: null
+                    });
+                } catch (sortError) {
+                    try {
+                        result = await pb.collection(COLLECTION_NAME).getList(1, 500, {
+                            sort: '-id',
+                            requestKey: null
+                        });
+                    } catch (_) {
+                        result = await pb.collection(COLLECTION_NAME).getList(1, 500, {
+                            requestKey: null
+                        });
+                    }
+                }
 
                 allRecords = result.items.filter(record => getBijlagen(record).length > 0);
                 emptyMessage = {
