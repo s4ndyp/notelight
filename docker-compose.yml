@@ -1,0 +1,12 @@
+services:
+  notelight:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      # Bewaar database én bijlagen tussen herstarts/deploys
+      - notelight_data:/pb/pb_data
+    restart: unless-stopped
+
+volumes:
+  notelight_data:

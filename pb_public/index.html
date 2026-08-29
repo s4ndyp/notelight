@@ -23,8 +23,8 @@
             }
         }
     </script>
-    <!-- PocketBase SDK -->
-    <script src="https://unpkg.com/pocketbase/dist/pocketbase.umd.js"></script>
+    <!-- PocketBase SDK (gepinned; hoort bij server >= 0.23 voor file +/− modifiers) -->
+    <script src="https://unpkg.com/pocketbase@0.28.0/dist/pocketbase.umd.js"></script>
     <!-- CodeMirror 5 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
@@ -1226,13 +1226,34 @@
             bijlageFileList.innerHTML = items.join('');
         }
 
-        function appendBijlagenToFormData(formData, { isUpdate = false } = {}) {
+        function appendBijlagenToFormData(formData, { isUpdate = false, appendMode = 'plus' } = {}) {
             if (isUpdate) {
                 bijlageState.removed.forEach(name => formData.append('bijlage-', name));
-                bijlageState.pending.forEach(({ file }) => formData.append('bijlage+', file));
+                // PocketBase >= 0.23: "bijlage+" appends. Older servers ignore "+" and need plain "bijlage".
+                const fieldName = appendMode === 'plain' ? 'bijlage' : 'bijlage+';
+                bijlageState.pending.forEach(({ file }) => formData.append(fieldName, file));
                 return;
             }
             bijlageState.pending.forEach(({ file }) => formData.append('bijlage', file));
+        }
+
+        function expectedBijlageCountAfterSave() {
+            return bijlageState.existing.length + bijlageState.pending.length;
+        }
+
+        function formatPbError(error) {
+            const base = error?.data?.message || error?.message || 'Onbekende fout';
+            const fieldErrors = error?.data?.data;
+            if (!fieldErrors || typeof fieldErrors !== 'object') return base;
+
+            const details = Object.entries(fieldErrors)
+                .map(([field, info]) => {
+                    const msg = info?.message || info?.code || JSON.stringify(info);
+                    return `${field}: ${msg}`;
+                })
+                .filter(Boolean);
+
+            return details.length ? `${base} (${details.join('; ')})` : base;
         }
 
         function setupBijlageUpload() {
@@ -1473,9 +1494,9 @@
                 return;
             }
 
-            const formData = new FormData(dataForm);
             const editingId = state.editingId;
-            appendBijlagenToFormData(formData, { isUpdate: Boolean(editingId) });
+            const pendingCount = bijlageState.pending.length;
+            const expectedBijlagen = expectedBijlageCountAfterSave();
 
             try {
                 setFormButtonsDisabled(true);
@@ -1485,7 +1506,22 @@
                 }
 
                 if (editingId) {
-                    await pb.collection(COLLECTION_NAME).update(editingId, formData);
+                    const formData = new FormData(dataForm);
+                    appendBijlagenToFormData(formData, { isUpdate: true, appendMode: 'plus' });
+                    let savedRecord = await pb.collection(COLLECTION_NAME).update(editingId, formData);
+
+                    // Fallback for PocketBase < 0.23: "bijlage+" is ignored (no error), plain "bijlage" appends.
+                    // Only retry when none of the pending files were stored (avoid replace-semantics on newer PB).
+                    if (pendingCount > 0 && getBijlagen(savedRecord).length === bijlageState.existing.length) {
+                        const fallbackData = new FormData(dataForm);
+                        appendBijlagenToFormData(fallbackData, { isUpdate: true, appendMode: 'plain' });
+                        savedRecord = await pb.collection(COLLECTION_NAME).update(editingId, fallbackData);
+                    }
+
+                    if (pendingCount > 0 && getBijlagen(savedRecord).length < expectedBijlagen) {
+                        throw new Error('Bijlagen konden niet worden opgeslagen. Controleer of het veld "bijlage" een file-veld is (Max files ≥ 2) en of er genoeg schijfruimte is.');
+                    }
+
                     showToast('Succes', closeAfterSave ? 'Record is gewijzigd' : 'Wijzigingen opgeslagen', 'success');
 
                     await fetchData();
@@ -1494,12 +1530,19 @@
                     if (closeAfterSave) {
                         cancelEditMode();
                     } else {
-                        const updated = state.records.find(r => r.id === editingId);
+                        const updated = state.records.find(r => r.id === editingId) || savedRecord;
                         if (updated) refreshBijlageFromRecord(updated);
                         renderTable();
                     }
                 } else {
-                    await pb.collection(COLLECTION_NAME).create(formData);
+                    const formData = new FormData(dataForm);
+                    appendBijlagenToFormData(formData, { isUpdate: false });
+                    const created = await pb.collection(COLLECTION_NAME).create(formData);
+
+                    if (pendingCount > 0 && getBijlagen(created).length < pendingCount) {
+                        throw new Error('Record is aangemaakt, maar bijlagen ontbreken. Controleer het file-veld "bijlage" in PocketBase.');
+                    }
+
                     dataForm.reset();
                     showToast('Succes', 'Nieuw record opgeslagen', 'success');
                     await fetchData();
@@ -1507,7 +1550,7 @@
                 }
             } catch (error) {
                 console.error('Upload error:', error);
-                showToast('Fout', 'Actie mislukt: ' + (error.data?.message || error.message), 'error');
+                showToast('Fout', 'Actie mislukt: ' + formatPbError(error), 'error');
             } finally {
                 setFormButtonsDisabled(false);
                 btnSaveStayText.innerText = 'Opslaan';

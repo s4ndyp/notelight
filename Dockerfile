@@ -1,29 +1,25 @@
 FROM alpine:latest
 
-# Geef eventueel de gewenste PocketBase versie op
-ARG PB_VERSION=0.22.20
+# PocketBase >= 0.23 is required for bijlage+/file append modifiers used by the UI.
+ARG PB_VERSION=0.40.1
 
-# Benodigde pakketten installeren
 RUN apk add --no-cache \
     ca-certificates \
     unzip \
     wget \
     zip
 
-# Download en uitpakken van PocketBase
 ADD https://github.com/pocketbase/pocketbase/releases/download/v${PB_VERSION}/pocketbase_${PB_VERSION}_linux_amd64.zip /tmp/pb.zip
-RUN unzip /tmp/pb.zip -d /pb/
-RUN rm /tmp/pb.zip
+RUN unzip /tmp/pb.zip -d /pb/ \
+    && rm /tmp/pb.zip \
+    && chmod +x /pb/pocketbase
 
-# Kopieer je statische HTML/CSS/JS bestanden naar de web-map van PocketBase
 COPY ./pb_public /pb/pb_public
 
-# Optioneel: kopieer migraties of JS hooks als je die gebruikt
-# COPY ./pb_migrations /pb/pb_migrations
-# COPY ./pb_hooks /pb/pb_hooks
+# Persist database + uploaded files outside the container layer.
+WORKDIR /pb
+VOLUME ["/pb/pb_data"]
 
-# Expose poort 8080
 EXPOSE 8080
 
-# Start PocketBase server
 CMD ["/pb/pocketbase", "serve", "--http=0.0.0.0:8080"]
