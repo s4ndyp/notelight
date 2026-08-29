@@ -13,6 +13,23 @@
     const KEUZE_COLLECTION = 'keuzelijsten';
     const VOORKEUR_COLLECTION = 'voorkeuren';
     const VOORKEUR_KEY = 'team';
+    const KEUZE_COLORS_KEY = 'pbApp_keuzeColors';
+    const COLORABLE_CATEGORIES = new Set(['dataset', 'soort']);
+    const DEFAULT_SOORT_HEX = '#9ca3af';
+    const DEFAULT_DATASET_HEXES = [
+        '#60a5fa',
+        '#facc15',
+        '#4ade80',
+        '#c084fc',
+        '#22d3ee',
+        '#fb923c',
+        '#f472b6',
+        '#2dd4bf',
+        '#818cf8',
+        '#fbbf24',
+        '#fb7185',
+        '#a3e635',
+    ];
     const CHOICE_CATEGORIES = [
         { id: 'status', label: 'Status', allowEmpty: false },
         { id: 'soort', label: 'Soort', allowEmpty: false },
@@ -28,6 +45,13 @@
         'Ter info',
         'Archief',
     ];
+
+    const galleryState = {
+        records: [],
+        loaded: false,
+        loading: false,
+        filterTimer: null,
+    };
 
     function core() {
         return window.NotelightCore;
@@ -324,6 +348,14 @@
         if (!c?.pb) return;
 
         const params = new URLSearchParams(window.location.search);
+        if (params.get('gallery') === '1') {
+            openBijlagenGalerijModal();
+            const url = new URL(window.location.href);
+            url.pathname = appPathname();
+            url.searchParams.delete('gallery');
+            history.replaceState(null, '', url.pathname + url.search + url.hash);
+        }
+
         const id = params.get('id');
         if (!id) return;
         // Normalize URL away from /index.html so later edits keep the id.
@@ -362,10 +394,82 @@
         select.value = str;
     }
 
+    function colorKey(categorie, waarde) {
+        return `${categorie}::${String(waarde || '').trim().toLowerCase()}`;
+    }
+
+    function readLocalKeuzeColors() {
+        try {
+            const raw = JSON.parse(localStorage.getItem(KEUZE_COLORS_KEY) || '{}');
+            return raw && typeof raw === 'object' ? raw : {};
+        } catch (_) {
+            return {};
+        }
+    }
+
+    function writeLocalKeuzeColor(categorie, waarde, hex) {
+        const colors = readLocalKeuzeColors();
+        const key = colorKey(categorie, waarde);
+        if (hex) colors[key] = hex;
+        else delete colors[key];
+        localStorage.setItem(KEUZE_COLORS_KEY, JSON.stringify(colors));
+    }
+
+    function normalizeHexColor(value) {
+        const raw = String(value || '').trim();
+        if (/^#[0-9a-fA-F]{6}$/.test(raw)) return raw.toLowerCase();
+        if (/^#[0-9a-fA-F]{3}$/.test(raw)) {
+            const chars = raw.slice(1).toLowerCase();
+            return `#${chars[0]}${chars[0]}${chars[1]}${chars[1]}${chars[2]}${chars[2]}`;
+        }
+        return null;
+    }
+
+    function hashString(value) {
+        const normalized = String(value || '').trim().toLowerCase();
+        let hash = 0;
+        for (let i = 0; i < normalized.length; i++) {
+            hash = normalized.charCodeAt(i) + ((hash << 5) - hash);
+        }
+        return Math.abs(hash);
+    }
+
+    function defaultColorFor(categorie, waarde) {
+        if (categorie === 'dataset') {
+            return DEFAULT_DATASET_HEXES[hashString(waarde) % DEFAULT_DATASET_HEXES.length];
+        }
+        if (categorie === 'soort') {
+            return DEFAULT_DATASET_HEXES[hashString(waarde) % DEFAULT_DATASET_HEXES.length] || DEFAULT_SOORT_HEX;
+        }
+        return '#9ca3af';
+    }
+
     function getChoicesFor(categorie) {
         const c = core();
         ensurePaginationState(c.state);
         return c.state.keuzelijsten.byCategorie[categorie] || [];
+    }
+
+    function getKeuzeColor(categorie, waarde) {
+        if (!COLORABLE_CATEGORIES.has(categorie) || !waarde?.trim()) return null;
+        const item = getChoicesFor(categorie).find(
+            (entry) => String(entry.waarde || '').trim().toLowerCase() === String(waarde).trim().toLowerCase()
+        );
+        const fromItem = normalizeHexColor(item?.kleur);
+        if (fromItem) return fromItem;
+        return normalizeHexColor(readLocalKeuzeColors()[colorKey(categorie, waarde)]);
+    }
+
+    function applyOptionColors(select, categorie) {
+        if (!select || !COLORABLE_CATEGORIES.has(categorie)) return;
+        Array.from(select.options).forEach((opt) => {
+            if (!opt.value) {
+                opt.style.color = '';
+                return;
+            }
+            const hex = getKeuzeColor(categorie, opt.value) || defaultColorFor(categorie, opt.value);
+            opt.style.color = hex;
+        });
     }
 
     function renderChoiceSelects() {
@@ -407,6 +511,8 @@
             if (current) ensureSelectHasValue(select, current);
             else if (id === 'status') select.value = 'Nieuw';
             else select.value = '';
+
+            applyOptionColors(select, id);
         });
 
         c.syncColoredFormFields?.();
@@ -626,6 +732,35 @@
         }
     }
 
+    async function updateKeuzeColor(id, categorie, waarde, hex) {
+        const c = core();
+        const cleanHex = normalizeHexColor(hex);
+        if (!cleanHex) return;
+
+        writeLocalKeuzeColor(categorie, waarde, cleanHex);
+
+        const list = c.state.keuzelijsten.byCategorie[categorie] || [];
+        const item = list.find((entry) => entry.id === id);
+        if (item) item.kleur = cleanHex;
+
+        const collectionItem = c.state.keuzelijsten.items.find((entry) => entry.id === id);
+        if (collectionItem) collectionItem.kleur = cleanHex;
+
+        renderChoiceSelects();
+        c.renderTable?.();
+
+        if (!c.state.keuzelijsten.available || String(id).startsWith('local-')) {
+            return;
+        }
+
+        try {
+            await c.pb.collection(KEUZE_COLLECTION).update(id, { kleur: cleanHex });
+        } catch (error) {
+            // Veld 'kleur' ontbreekt nog in het schema: lokaal bewaren is genoeg.
+            console.warn('Kleur opslaan in PocketBase mislukt (lokaal bewaard):', error);
+        }
+    }
+
     function ensureChoicePromptModal() {
         let modal = document.getElementById('choice-add-modal');
         if (modal) return modal;
@@ -702,23 +837,32 @@
 
         body.innerHTML = CHOICE_CATEGORIES.map(({ id, label }) => {
             const items = getChoicesFor(id);
+            const showColor = COLORABLE_CATEGORIES.has(id);
             const list =
                 items.length === 0
                     ? `<p class="text-xs text-gray-500 italic">Nog geen waarden</p>`
                     : items
-                          .map(
-                              (item) => `
+                          .map((item) => {
+                              const color =
+                                  getKeuzeColor(id, item.waarde) || defaultColorFor(id, item.waarde);
+                              const colorControl = showColor
+                                  ? `<input type="color" class="keuze-color-picker" value="${c.escapeAttr(color)}" data-keuze-color="${c.escapeAttr(item.id)}" data-categorie="${id}" data-waarde="${c.escapeAttr(item.waarde)}" title="Kleur instellen">`
+                                  : '';
+                              return `
                         <div class="keuze-item">
-                            <span class="text-sm text-gray-200 truncate" title="${c.escapeAttr(item.waarde)}">${c.escapeAttr(item.waarde)}</span>
+                            <div class="keuze-item-main">
+                                ${colorControl}
+                                <span class="text-sm truncate" style="color:${c.escapeAttr(showColor ? color : '#e5e7eb')}" title="${c.escapeAttr(item.waarde)}">${c.escapeAttr(item.waarde)}</span>
+                            </div>
                             <button type="button" class="text-xs text-red-400 hover:text-red-300" data-delete-keuze="${item.id}">Verwijder</button>
-                        </div>`
-                          )
+                        </div>`;
+                          })
                           .join('');
 
             return `
                 <section class="keuze-cat-block">
                     <div class="flex items-center justify-between gap-2 mb-2">
-                        <h3 class="text-sm font-medium text-white">${label}</h3>
+                        <h3 class="text-sm font-medium text-white">${label}${showColor ? ' <span class="text-xs font-normal text-gray-500">· kleur</span>' : ''}</h3>
                         <button type="button" class="text-xs text-blue-400 hover:text-blue-300" data-add-keuze="${id}">+ Toevoegen</button>
                     </div>
                     ${list}
@@ -733,6 +877,234 @@
 
     function closeKeuzelijstenModal() {
         document.getElementById('keuzelijsten-modal')?.classList.add('hidden');
+    }
+
+    function getBijlagen(record) {
+        if (!record?.bijlage) return [];
+        return Array.isArray(record.bijlage) ? record.bijlage.filter(Boolean) : [record.bijlage];
+    }
+
+    function isImageFileName(name) {
+        return /\.(jpe?g|png|gif|webp|svg|bmp)$/i.test(name || '');
+    }
+
+    function renderGalleryThumb(record, fileName) {
+        const c = core();
+        const fileUrl = c.pb.files.getUrl(record, fileName);
+        const safeName = c.escapeAttr(fileName);
+
+        if (isImageFileName(fileName)) {
+            const thumbUrl = c.pb.files.getUrl(record, fileName, { thumb: '300x300f' });
+            return `
+                <a href="${fileUrl}" target="_blank" rel="noopener noreferrer" class="gallery-thumb" title="${safeName}">
+                    <img src="${thumbUrl}" alt="${safeName}" loading="lazy" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src='${fileUrl}'}">
+                </a>`;
+        }
+
+        return `
+            <a href="${fileUrl}" target="_blank" rel="noopener noreferrer" class="gallery-thumb" title="${safeName}">
+                <span class="gallery-thumb-fallback">
+                    <svg class="w-7 h-7" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                    <span class="gallery-thumb-name">${safeName}</span>
+                </span>
+            </a>`;
+    }
+
+    function renderGalleryGroup(record, files) {
+        if (!files.length) return '';
+        const c = core();
+        const title = record.titel?.trim() || 'Zonder titel';
+        const meta = [record.soort, record.status].filter(Boolean).join(' · ');
+
+        return `
+            <article class="gallery-group">
+                <h3 class="gallery-group-title" title="${c.escapeAttr(title)}">
+                    <button type="button" class="hover:text-blue-400 transition-colors text-left" data-open-gallery-record="${c.escapeAttr(record.id)}">${c.escapeAttr(title)}</button>
+                </h3>
+                <div class="gallery-group-box">
+                    ${files.map((fileName) => renderGalleryThumb(record, fileName)).join('')}
+                </div>
+                <p class="gallery-meta">
+                    ${meta ? `${c.escapeAttr(meta)} · ` : ''}
+                    <button type="button" class="text-blue-400 hover:text-blue-300" data-open-gallery-record="${c.escapeAttr(record.id)}">Record openen</button>
+                </p>
+            </article>
+        `;
+    }
+
+    function matchesGalleryFilter(value, query) {
+        if (!query) return true;
+        return String(value || '').toLowerCase().includes(query);
+    }
+
+    function getFilteredGalleryGroups() {
+        const titelQuery = (document.getElementById('gallery-filter-titel')?.value || '')
+            .trim()
+            .toLowerCase();
+        const filenameQuery = (document.getElementById('gallery-filter-filename')?.value || '')
+            .trim()
+            .toLowerCase();
+
+        return galleryState.records
+            .map((record) => {
+                const title = record.titel?.trim() || 'Zonder titel';
+                if (!matchesGalleryFilter(title, titelQuery)) return null;
+
+                const files = getBijlagen(record).filter((fileName) =>
+                    matchesGalleryFilter(fileName, filenameQuery)
+                );
+                if (!files.length) return null;
+                return { record, files };
+            })
+            .filter(Boolean);
+    }
+
+    function renderGalleryModalContent() {
+        const grid = document.getElementById('gallery-grid');
+        const empty = document.getElementById('gallery-empty');
+        const summary = document.getElementById('gallery-summary');
+        const emptyTitle = document.getElementById('gallery-empty-title');
+        const emptySubtitle = document.getElementById('gallery-empty-subtitle');
+        if (!grid || !empty || !summary) return;
+
+        const groups = getFilteredGalleryGroups();
+        const totalFiles = groups.reduce((sum, group) => sum + group.files.length, 0);
+        const hasFilters =
+            (document.getElementById('gallery-filter-titel')?.value || '').trim() ||
+            (document.getElementById('gallery-filter-filename')?.value || '').trim();
+
+        grid.classList.add('hidden');
+        empty.classList.add('hidden');
+
+        if (!galleryState.records.length) {
+            summary.textContent = 'Geen bijlagen gevonden';
+            if (emptyTitle) emptyTitle.textContent = 'Geen bijlagen gevonden';
+            if (emptySubtitle) emptySubtitle.textContent = 'Voeg bijlagen toe aan records in de app.';
+            empty.classList.remove('hidden');
+            return;
+        }
+
+        if (!groups.length) {
+            summary.textContent = hasFilters
+                ? 'Geen resultaten voor je zoekopdracht'
+                : 'Geen bijlagen gevonden';
+            if (emptyTitle) emptyTitle.textContent = 'Geen bijlagen gevonden';
+            if (emptySubtitle) {
+                emptySubtitle.textContent = hasFilters
+                    ? 'Pas je zoekfilters aan of wis ze om meer te zien.'
+                    : 'Voeg bijlagen toe aan records in de app.';
+            }
+            empty.classList.remove('hidden');
+            return;
+        }
+
+        summary.textContent = hasFilters
+            ? `${totalFiles} bijlage${totalFiles === 1 ? '' : 'n'} in ${groups.length} record${groups.length === 1 ? '' : 's'} (gefilterd)`
+            : `${totalFiles} bijlage${totalFiles === 1 ? '' : 'n'} in ${groups.length} record${groups.length === 1 ? '' : 's'}`;
+
+        grid.innerHTML = groups.map(({ record, files }) => renderGalleryGroup(record, files)).join('');
+        grid.classList.remove('hidden');
+    }
+
+    async function loadGalleryRecords() {
+        const c = core();
+        if (!c?.pb || galleryState.loading) return;
+
+        const loading = document.getElementById('gallery-loading');
+        const summary = document.getElementById('gallery-summary');
+        galleryState.loading = true;
+        loading?.classList.remove('hidden');
+        document.getElementById('gallery-grid')?.classList.add('hidden');
+        document.getElementById('gallery-empty')?.classList.add('hidden');
+        if (summary) summary.textContent = 'Bijlagen laden...';
+
+        try {
+            let result;
+            try {
+                result = await getListSafe(c.pb, c.COLLECTION_NAME, 1, 500, {
+                    sort: '-created',
+                    requestKey: null,
+                });
+            } catch (_) {
+                result = await getListSafe(c.pb, c.COLLECTION_NAME, 1, 500, {
+                    requestKey: null,
+                });
+            }
+
+            galleryState.records = result.items.filter((record) => getBijlagen(record).length > 0);
+            galleryState.loaded = true;
+            renderGalleryModalContent();
+        } catch (error) {
+            galleryState.records = [];
+            if (summary) summary.textContent = 'Fout bij laden';
+            const empty = document.getElementById('gallery-empty');
+            const emptyTitle = document.getElementById('gallery-empty-title');
+            const emptySubtitle = document.getElementById('gallery-empty-subtitle');
+            empty?.classList.remove('hidden');
+            if (emptyTitle) emptyTitle.textContent = 'Kon bijlagen niet laden';
+            if (emptySubtitle) emptySubtitle.textContent = error.message || 'Controleer of PocketBase draait.';
+            console.error(error);
+        } finally {
+            galleryState.loading = false;
+            loading?.classList.add('hidden');
+        }
+    }
+
+    function openBijlagenGalerijModal({ forceReload = false } = {}) {
+        document.getElementById('bijlagen-galerij-modal')?.classList.remove('hidden');
+        if (!galleryState.loaded || forceReload) {
+            loadGalleryRecords();
+        } else {
+            renderGalleryModalContent();
+        }
+    }
+
+    function closeBijlagenGalerijModal() {
+        document.getElementById('bijlagen-galerij-modal')?.classList.add('hidden');
+    }
+
+    function openRecordFromGallery(recordId) {
+        const c = core();
+        const record =
+            c.state.records.find((item) => item.id === recordId) ||
+            galleryState.records.find((item) => item.id === recordId);
+        closeBijlagenGalerijModal();
+        if (record) {
+            c.loadRecordForEdit?.(record);
+            setRecordUrl(recordId);
+            return;
+        }
+        c.pb
+            ?.collection(c.COLLECTION_NAME)
+            .getOne(recordId)
+            .then((fetched) => {
+                c.loadRecordForEdit?.(fetched);
+                setRecordUrl(recordId);
+            })
+            .catch((error) => {
+                console.warn(error);
+                c.showToast?.('Niet gevonden', 'Record bestaat niet (meer).', 'error');
+            });
+    }
+
+    function scheduleGalleryFilterRender() {
+        clearTimeout(galleryState.filterTimer);
+        galleryState.filterTimer = setTimeout(renderGalleryModalContent, 200);
+    }
+
+    function closeTopModal() {
+        const choiceAdd = document.getElementById('choice-add-modal');
+        if (choiceAdd && !choiceAdd.classList.contains('hidden')) {
+            choiceAdd.classList.add('hidden');
+            choiceAdd.dataset.categorie = '';
+            return;
+        }
+        const gallery = document.getElementById('bijlagen-galerij-modal');
+        if (gallery && !gallery.classList.contains('hidden')) {
+            closeBijlagenGalerijModal();
+            return;
+        }
+        closeKeuzelijstenModal();
     }
 
     function collectPrefsPayload(state) {
@@ -905,11 +1277,49 @@
                 deleteKeuze(delBtn.dataset.deleteKeuze);
             }
         });
+        document.getElementById('keuzelijsten-body')?.addEventListener('input', (e) => {
+            const colorInput = e.target.closest('[data-keuze-color]');
+            if (!colorInput) return;
+            const label = colorInput.parentElement?.querySelector('span');
+            if (label) label.style.color = colorInput.value;
+        });
+        document.getElementById('keuzelijsten-body')?.addEventListener('change', (e) => {
+            const colorInput = e.target.closest('[data-keuze-color]');
+            if (!colorInput) return;
+            updateKeuzeColor(
+                colorInput.dataset.keuzeColor,
+                colorInput.dataset.categorie,
+                colorInput.dataset.waarde,
+                colorInput.value
+            );
+        });
+        document.getElementById('btn-bijlagen-galerij')?.addEventListener('click', () => {
+            openBijlagenGalerijModal();
+        });
+        document
+            .getElementById('btn-bijlagen-galerij-close')
+            ?.addEventListener('click', closeBijlagenGalerijModal);
+        document
+            .getElementById('btn-bijlagen-galerij-refresh')
+            ?.addEventListener('click', () => openBijlagenGalerijModal({ forceReload: true }));
+        document.getElementById('bijlagen-galerij-modal')?.addEventListener('click', (e) => {
+            if (e.target.id === 'bijlagen-galerij-modal') closeBijlagenGalerijModal();
+            const openBtn = e.target.closest('[data-open-gallery-record]');
+            if (openBtn) {
+                openRecordFromGallery(openBtn.dataset.openGalleryRecord);
+            }
+        });
+        document
+            .getElementById('gallery-filter-titel')
+            ?.addEventListener('input', scheduleGalleryFilterRender);
+        document
+            .getElementById('gallery-filter-filename')
+            ?.addEventListener('input', scheduleGalleryFilterRender);
         document.querySelectorAll('.btn-choice-add').forEach((btn) => {
             btn.addEventListener('click', () => promptAddKeuze(btn.dataset.categorie));
         });
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'Escape') closeKeuzelijstenModal();
+            if (e.key === 'Escape') closeTopModal();
         });
     }
 
@@ -927,6 +1337,9 @@
         promptAddKeuze,
         openKeuzelijstenModal,
         closeKeuzelijstenModal,
+        openBijlagenGalerijModal,
+        closeBijlagenGalerijModal,
+        getKeuzeColor,
         loadVoorkeuren,
         scheduleVoorkeurenSync,
         updateLoadMoreUi,
