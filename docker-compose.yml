@@ -1,10 +1,15 @@
 services:
   notelight:
+    # Gebruik de GHCR-image (CI bouwt :latest vanaf main).
+    # Bij deploy vanuit Git in Dockhand mag `build: .` blijven staan.
+    image: ghcr.io/s4ndyp/notelight:latest
     build: .
+    container_name: notelight
     ports:
-      - "8080:8080"
+      # host:container — app bereikbaar op poort 8084, intern luistert PocketBase op 8080
+      - "8084:8080"
     volumes:
-      # Bewaar database én bijlagen tussen herstarts/deploys
+      # Database + bijlagen persistent houden
       - notelight_data:/pb/pb_data
     restart: unless-stopped
 
