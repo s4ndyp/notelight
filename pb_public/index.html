@@ -28,7 +28,6 @@
     <!-- CodeMirror 5 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/markdown/markdown.min.js"></script>
     <style>
         /* Custom scrollbar for dark mode */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -136,11 +135,6 @@
         .oms-cm-host .CodeMirror-focused .CodeMirror-selected { background: rgba(59, 130, 246, 0.4); }
         .oms-cm-host .CodeMirror-line { line-height: 1.55; }
         .oms-cm-host .CodeMirror-activeline-background { background: rgba(55, 65, 81, 0.35); }
-        .oms-cm-host .CodeMirror .cm-header,
-        .oms-cm-host .CodeMirror .cm-header-1 {
-            color: #93c5fd;
-            font-weight: 700;
-        }
         .oms-visual {
             min-height: 27rem;
             max-height: 72rem;
@@ -187,7 +181,7 @@
             min-width: 0;
             font-size: 1.15rem;
             font-weight: 700;
-            color: #f3f4f6;
+            color: #93c5fd;
             line-height: 1.4;
             padding: 0.25rem 0 0.15rem;
             border-bottom: 1px solid #374151;
@@ -2405,7 +2399,6 @@
             } else {
                 omsCmView = CodeMirror(omschrijvingCmHost, {
                     value: '',
-                    mode: (CodeMirror.modes && CodeMirror.modes.markdown) ? 'markdown' : null,
                     lineNumbers: true,
                     lineWrapping: true,
                     indentUnit: 2,
