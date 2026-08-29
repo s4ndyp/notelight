@@ -461,6 +461,34 @@
             background: #111827;
         }
         .bijlage-item.is-pending { border-color: rgba(59, 130, 246, 0.35); background: rgba(37, 99, 235, 0.06); }
+        .bijlage-toggle {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            width: 100%;
+            margin-top: 0.15rem;
+            padding: 0.35rem 0.5rem;
+            border: 1px dashed #374151;
+            border-radius: 0.5rem;
+            background: transparent;
+            color: #9ca3af;
+            font-size: 0.72rem;
+            transition: color 0.15s, border-color 0.15s, background 0.15s;
+        }
+        .bijlage-toggle:hover {
+            color: #93c5fd;
+            border-color: #4b5563;
+            background: rgba(55, 65, 81, 0.35);
+        }
+        .bijlage-toggle-icon {
+            width: 0.85rem;
+            height: 0.85rem;
+            transition: transform 0.15s;
+        }
+        .bijlage-toggle.is-expanded .bijlage-toggle-icon {
+            transform: rotate(180deg);
+        }
         .bijlage-item-preview {
             flex-shrink: 0;
             width: 2.5rem;
@@ -1120,7 +1148,8 @@
             record: null,
             existing: [],
             removed: [],
-            pending: []
+            pending: [],
+            listExpanded: false
         };
 
         const DATASET_TEXT_COLORS = [
@@ -1408,6 +1437,7 @@
             bijlageState.existing = [];
             bijlageState.removed = [];
             bijlageState.pending = [];
+            bijlageState.listExpanded = false;
             inputBijlage.value = '';
             renderBijlageList();
         }
@@ -1418,6 +1448,7 @@
             bijlageState.existing = getBijlagen(record);
             bijlageState.removed = [];
             bijlageState.pending = [];
+            bijlageState.listExpanded = false;
             inputBijlage.value = '';
             renderBijlageList();
         }
@@ -1428,6 +1459,7 @@
             bijlageState.existing = getBijlagen(record);
             bijlageState.removed = [];
             bijlageState.pending = [];
+            bijlageState.listExpanded = false;
             inputBijlage.value = '';
             renderBijlageList();
         }
@@ -1557,7 +1589,25 @@
                 `);
             });
 
-            bijlageFileList.innerHTML = items.join('');
+            const collapsedLimit = 2;
+            const shouldCollapse = totalCount > collapsedLimit && !bijlageState.listExpanded;
+            const visibleItems = shouldCollapse ? items.slice(-collapsedLimit) : items;
+            const hiddenCount = shouldCollapse ? totalCount - collapsedLimit : 0;
+
+            let toggleHtml = '';
+            if (totalCount > collapsedLimit) {
+                const label = bijlageState.listExpanded
+                    ? 'Toon minder'
+                    : `Toon alle ${totalCount} bijlagen (${hiddenCount} verborgen)`;
+                toggleHtml = `
+                    <button type="button" class="bijlage-toggle ${bijlageState.listExpanded ? 'is-expanded' : ''}" data-action="toggle-bijlage-list" title="${bijlageState.listExpanded ? 'Inklappen' : 'Uitklappen'}">
+                        <svg class="bijlage-toggle-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                        ${label}
+                    </button>
+                `;
+            }
+
+            bijlageFileList.innerHTML = visibleItems.join('') + toggleHtml;
         }
 
         function getRecordFormPayload() {
@@ -1670,6 +1720,10 @@
                 }
                 if (btn.dataset.action === 'remove-pending') {
                     requestRemovePendingBijlage(btn.dataset.bijlageId);
+                }
+                if (btn.dataset.action === 'toggle-bijlage-list') {
+                    bijlageState.listExpanded = !bijlageState.listExpanded;
+                    renderBijlageList();
                 }
             });
         }
