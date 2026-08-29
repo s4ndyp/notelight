@@ -2470,6 +2470,7 @@
 
             let deleted = 0;
             const failed = [];
+            let shouldCancelEdit = false;
 
             try {
                 for (const id of ids) {
@@ -2478,7 +2479,7 @@
                         deleted += 1;
                         state.pinnedRecordIds = state.pinnedRecordIds.filter((recordId) => recordId !== id);
                         state.selectedRecordIds = state.selectedRecordIds.filter((recordId) => recordId !== id);
-                        if (state.editingId === id) cancelEditMode();
+                        if (state.editingId === id) shouldCancelEdit = true;
                     } catch (error) {
                         failed.push(id);
                         console.error('Bulk delete failed for', id, error);
@@ -2486,6 +2487,7 @@
                 }
 
                 savePinnedRecordIds();
+                if (shouldCancelEdit) cancelEditMode();
 
                 if (deleted > 0 && failed.length === 0) {
                     showToast('Verwijderd', `${deleted} record${deleted === 1 ? '' : 's'} verwijderd.`, 'success');
