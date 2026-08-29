@@ -2304,9 +2304,8 @@
         }
 
         function applyNewEntryDefaults() {
-            const statusSelect = document.getElementById('input-status');
-            if (statusSelect) statusSelect.value = 'Nieuw';
             window.NotelightFeatures?.renderChoiceSelects?.();
+            const statusSelect = document.getElementById('input-status');
             if (statusSelect) statusSelect.value = 'Nieuw';
             syncColoredFormFields();
         }
