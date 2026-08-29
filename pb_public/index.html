@@ -54,6 +54,24 @@
         .btn-row-pin:not(.is-pinned) { color: #6b7280; }
         .btn-row-pin:not(.is-pinned):hover { color: #fbbf24; }
 
+        .row-select-cell {
+            width: 2.25rem;
+            min-width: 2.25rem;
+            max-width: 2.25rem;
+            text-align: center;
+            vertical-align: middle;
+        }
+        .row-select-checkbox {
+            width: 1rem;
+            height: 1rem;
+            accent-color: #3b82f6;
+            cursor: pointer;
+        }
+        tbody tr.is-selected { background: rgba(37, 99, 235, 0.12); }
+        tbody tr.is-selected:hover { background: rgba(37, 99, 235, 0.18); }
+        tbody tr.is-selected.is-pinned { background: rgba(37, 99, 235, 0.16); }
+        #btn-bulk-delete.hidden { display: none; }
+
         .field-with-copy { display: flex; gap: 0.5rem; align-items: stretch; }
         .field-with-copy.field-flexible { align-items: flex-start; }
         .field-with-copy.field-flexible > input,
@@ -1057,6 +1075,11 @@
                     <input type="text" id="search-input" placeholder="Zoek in alle velden..." class="w-64 bg-gray-900 border border-gray-700 rounded-full pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all focus:w-80 placeholder-gray-500 shadow-inner">
                 </div>
 
+                <button id="btn-bulk-delete" type="button" class="hidden bg-red-900/40 hover:bg-red-800/60 border border-red-800 text-red-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2" title="Verwijder geselecteerde records">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                    Verwijderen (<span id="bulk-delete-count">0</span>)
+                </button>
+
                 <button id="btn-export" type="button" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2" title="Exporteer gefilterde records als CSV (alleen zichtbare kolommen)">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"></path></svg>
                     Exporteren
@@ -1137,6 +1160,9 @@
                 <table id="data-table" class="w-full text-left border-collapse text-sm">
                     <thead class="bg-gray-850/80 text-gray-400 text-xs uppercase tracking-wider sticky top-0 z-10 backdrop-blur-md">
                         <tr>
+                            <th class="row-select-cell font-semibold border-b border-gray-800" title="Selecteer alles">
+                                <input type="checkbox" id="select-all-records" class="row-select-checkbox" aria-label="Selecteer alle zichtbare records">
+                            </th>
                             <th data-col="prio" class="font-semibold border-b border-gray-800 text-center" title="Prio">Prio</th>
                             <th data-col="dataset" class="font-semibold border-b border-gray-800">Dataset</th>
                             <th data-col="titel" class="font-semibold border-b border-gray-800">Titel</th>
@@ -1253,6 +1279,7 @@
             activeFilterStr: '',
             activeSavedFilterIds: JSON.parse(localStorage.getItem('pbApp_activeSavedFilterIds') || '[]'),
             pinnedRecordIds: JSON.parse(localStorage.getItem('pbApp_pinnedRecordIds') || '[]'),
+            selectedRecordIds: [],
             editingId: null, // Toegevoegd voor bewerkingsmodus
             sortField: 'created',
             sortDirection: 'desc',
@@ -1564,6 +1591,61 @@
         function confirmAction(message) {
             return window.confirm(message);
         }
+
+        function pruneSelectedRecordIds() {
+            const visibleIds = new Set(state.records.map((record) => record.id));
+            state.selectedRecordIds = state.selectedRecordIds.filter((id) => visibleIds.has(id));
+        }
+
+        function updateBulkSelectionUi() {
+            const count = state.selectedRecordIds.length;
+            const bulkBtn = document.getElementById('btn-bulk-delete');
+            const countEl = document.getElementById('bulk-delete-count');
+            const selectAll = document.getElementById('select-all-records');
+            if (countEl) countEl.textContent = String(count);
+            if (bulkBtn) bulkBtn.classList.toggle('hidden', count === 0);
+
+            if (selectAll) {
+                const visibleCount = state.records.length;
+                const selectedVisible = state.records.filter((r) =>
+                    state.selectedRecordIds.includes(r.id)
+                ).length;
+                selectAll.checked = visibleCount > 0 && selectedVisible === visibleCount;
+                selectAll.indeterminate = selectedVisible > 0 && selectedVisible < visibleCount;
+                selectAll.disabled = visibleCount === 0;
+            }
+        }
+
+        function setRecordSelected(id, selected) {
+            if (selected) {
+                if (!state.selectedRecordIds.includes(id)) {
+                    state.selectedRecordIds.push(id);
+                }
+            } else {
+                state.selectedRecordIds = state.selectedRecordIds.filter((recordId) => recordId !== id);
+            }
+        }
+
+        function toggleSelectAllRecords(checked) {
+            if (checked) {
+                const ids = new Set(state.selectedRecordIds);
+                state.records.forEach((record) => ids.add(record.id));
+                state.selectedRecordIds = Array.from(ids);
+            } else {
+                const visibleIds = new Set(state.records.map((record) => record.id));
+                state.selectedRecordIds = state.selectedRecordIds.filter((id) => !visibleIds.has(id));
+            }
+            renderTable();
+        }
+
+        window.toggleRecordSelection = (id, event) => {
+            event.stopPropagation();
+            const checked = event.target?.checked;
+            setRecordSelected(id, Boolean(checked));
+            const row = event.target?.closest('tr');
+            if (row) row.classList.toggle('is-selected', Boolean(checked));
+            updateBulkSelectionUi();
+        };
 
         async function fetchPinnedRecords(extraFilter = '') {
             if (!pb || state.pinnedRecordIds.length === 0) return [];
@@ -2054,6 +2136,8 @@
             
             if (state.records.length === 0) {
                 emptyState.classList.remove('hidden');
+                pruneSelectedRecordIds();
+                updateBulkSelectionUi();
                 return;
             }
             
@@ -2063,7 +2147,8 @@
                 const tr = document.createElement('tr');
                 const isEditing = state.editingId === record.id;
                 const isPinned = state.pinnedRecordIds.includes(record.id);
-                tr.className = `transition-colors group ${isPinned ? 'is-pinned ' : ''}${isEditing ? 'bg-blue-900/20' : 'hover:bg-gray-800/50'}`;
+                const isSelected = state.selectedRecordIds.includes(record.id);
+                tr.className = `transition-colors group ${isPinned ? 'is-pinned ' : ''}${isSelected ? 'is-selected ' : ''}${isEditing ? 'bg-blue-900/20' : 'hover:bg-gray-800/50'}`;
                 
                 // Maak hele rij klikbaar (trigger bewerken)
                 tr.onclick = () => loadRecordForEdit(record);
@@ -2089,6 +2174,9 @@
                 };
 
                 tr.innerHTML = `
+                    <td class="row-select-cell border-b border-gray-800" onclick="event.stopPropagation()">
+                        <input type="checkbox" class="row-select-checkbox" aria-label="Selecteer record" ${isSelected ? 'checked' : ''} onchange="toggleRecordSelection('${record.id}', event)">
+                    </td>
                     <td data-col="prio" class="border-b border-gray-800 text-center">${renderPrioBadge(record.prio)}</td>
                     <td data-col="dataset" class="border-b border-gray-800 truncate" title="${record.dataset || ''}">${renderDatasetHTML(record.dataset)}</td>
                     <td data-col="titel" class="border-b border-gray-800 truncate text-gray-200 font-semibold" title="${record.titel || ''}">${safeHTML(record.titel)}</td>
@@ -2115,6 +2203,8 @@
             applyColumnVisibility();
             applyColumnWidths();
             updateSortButtons();
+            pruneSelectedRecordIds();
+            updateBulkSelectionUi();
         }
 
         function setupTableSort() {
@@ -2354,6 +2444,7 @@
             try {
                 await pb.collection(COLLECTION_NAME).delete(id);
                 state.pinnedRecordIds = state.pinnedRecordIds.filter(recordId => recordId !== id);
+                state.selectedRecordIds = state.selectedRecordIds.filter(recordId => recordId !== id);
                 savePinnedRecordIds();
                 showToast("Verwijderd", "Record is verwijderd.", "success");
                 if (state.editingId === id) cancelEditMode();
@@ -2362,6 +2453,58 @@
                 showToast("Fout", "Fout bij verwijderen: " + e.message, "error");
             }
         };
+
+        async function deleteSelectedRecords() {
+            const ids = state.selectedRecordIds.slice();
+            if (ids.length === 0) return;
+
+            const label = ids.length === 1
+                ? '1 geselecteerd record'
+                : `${ids.length} geselecteerde records`;
+            if (!confirmAction(`Weet je zeker dat je ${label} wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.`)) {
+                return;
+            }
+
+            const bulkBtn = document.getElementById('btn-bulk-delete');
+            if (bulkBtn) bulkBtn.disabled = true;
+
+            let deleted = 0;
+            const failed = [];
+
+            try {
+                for (const id of ids) {
+                    try {
+                        await pb.collection(COLLECTION_NAME).delete(id);
+                        deleted += 1;
+                        state.pinnedRecordIds = state.pinnedRecordIds.filter((recordId) => recordId !== id);
+                        state.selectedRecordIds = state.selectedRecordIds.filter((recordId) => recordId !== id);
+                        if (state.editingId === id) cancelEditMode();
+                    } catch (error) {
+                        failed.push(id);
+                        console.error('Bulk delete failed for', id, error);
+                    }
+                }
+
+                savePinnedRecordIds();
+
+                if (deleted > 0 && failed.length === 0) {
+                    showToast('Verwijderd', `${deleted} record${deleted === 1 ? '' : 's'} verwijderd.`, 'success');
+                } else if (deleted > 0) {
+                    showToast(
+                        'Gedeeltelijk verwijderd',
+                        `${deleted} verwijderd, ${failed.length} mislukt.`,
+                        'error'
+                    );
+                } else {
+                    showToast('Fout', 'Verwijderen mislukt.', 'error');
+                }
+
+                await fetchData();
+            } finally {
+                if (bulkBtn) bulkBtn.disabled = false;
+                updateBulkSelectionUi();
+            }
+        }
 
         // --- Event Listeners & Overige UI Logica ---
         function setupEventListeners() {
@@ -2373,6 +2516,14 @@
                     state.searchQuery = e.target.value;
                     fetchData();
                 }, 400);
+            });
+
+            document.getElementById('select-all-records')?.addEventListener('change', (e) => {
+                e.stopPropagation();
+                toggleSelectAllRecords(e.target.checked);
+            });
+            document.getElementById('btn-bulk-delete')?.addEventListener('click', () => {
+                deleteSelectedRecords();
             });
 
             // Toggles voor panels
