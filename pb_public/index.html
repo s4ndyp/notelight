@@ -28,6 +28,7 @@
     <!-- CodeMirror 5 -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/mode/markdown/markdown.min.js"></script>
     <style>
         /* Custom scrollbar for dark mode */
         ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -135,6 +136,11 @@
         .oms-cm-host .CodeMirror-focused .CodeMirror-selected { background: rgba(59, 130, 246, 0.4); }
         .oms-cm-host .CodeMirror-line { line-height: 1.55; }
         .oms-cm-host .CodeMirror-activeline-background { background: rgba(55, 65, 81, 0.35); }
+        .oms-cm-host .CodeMirror .cm-header,
+        .oms-cm-host .CodeMirror .cm-header-1 {
+            color: #93c5fd;
+            font-weight: 700;
+        }
         .oms-visual {
             min-height: 27rem;
             max-height: 72rem;
@@ -474,15 +480,15 @@
         }
         .form-header-dataset {
             flex-shrink: 0;
-            /* Invoerveld ≥ 22 tekens + kopieerknop (2.5rem) + gap (0.5rem) */
-            min-width: calc(22ch + 3rem);
-            width: max(12rem, calc(22ch + 3rem));
+            /* Invoerveld ≥ 26 tekens + kopieerknop (2.5rem) + gap (0.5rem) */
+            min-width: calc(26ch + 3rem);
+            width: max(12rem, calc(26ch + 3rem));
         }
         .form-header-dataset .field-with-copy > input {
             width: 100%;
             max-width: 100%;
             flex: 1;
-            min-width: 22ch;
+            min-width: 26ch;
             font-weight: 500;
         }
         #input-status {
@@ -2399,6 +2405,7 @@
             } else {
                 omsCmView = CodeMirror(omschrijvingCmHost, {
                     value: '',
+                    mode: (CodeMirror.modes && CodeMirror.modes.markdown) ? 'markdown' : null,
                     lineNumbers: true,
                     lineWrapping: true,
                     indentUnit: 2,
