@@ -487,6 +487,12 @@
             if (id === 'status' && fallback.length === 0) {
                 fallback = DEFAULT_STATUS_VALUES.slice();
             }
+            // Houd standaardvolgorde voor status (Nieuw eerst), anders kiest form.reset() alfabetisch Afgerond.
+            if (id === 'status' && fallback.length > 0) {
+                const preferred = DEFAULT_STATUS_VALUES.filter((value) => fallback.includes(value));
+                const rest = fallback.filter((value) => !DEFAULT_STATUS_VALUES.includes(value));
+                fallback = preferred.concat(rest);
+            }
 
             select.innerHTML = '';
             if (allowEmpty) {
@@ -505,6 +511,9 @@
                 const opt = document.createElement('option');
                 opt.value = value;
                 opt.textContent = value;
+                if (id === 'status' && value === 'Nieuw') {
+                    opt.defaultSelected = true;
+                }
                 select.appendChild(opt);
             });
 
