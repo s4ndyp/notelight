@@ -1125,18 +1125,45 @@
             renderBijlageList();
         }
 
+        // crypto.randomUUID() bestaat alleen in een secure context (HTTPS of localhost).
+        // Via Dockhand op http://host:8084 ontbreekt die API — zonder fallback crashte
+        // het toevoegen van bijlagen stil en werden bestanden nooit meegestuurd.
+        function createClientId() {
+            try {
+                if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+                    return crypto.randomUUID();
+                }
+                if (typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function') {
+                    const bytes = crypto.getRandomValues(new Uint8Array(16));
+                    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+                    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+                    const hex = [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
+                    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+                }
+            } catch (_) { /* fall through */ }
+            return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        }
+
         function addPendingBijlagen(fileList) {
             const files = [...fileList].filter(file => file instanceof File && file.size > 0);
-            if (!files.length) return;
+            if (!files.length) {
+                showToast('Geen bestand', 'Selecteer een bestand groter dan 0 bytes.', 'error');
+                return;
+            }
 
-            files.forEach(file => {
-                bijlageState.pending.push({
-                    id: crypto.randomUUID(),
-                    file,
-                    previewUrl: isImageFileName(file.name) ? URL.createObjectURL(file) : null
+            try {
+                files.forEach(file => {
+                    bijlageState.pending.push({
+                        id: createClientId(),
+                        file,
+                        previewUrl: isImageFileName(file.name) ? URL.createObjectURL(file) : null
+                    });
                 });
-            });
-            renderBijlageList();
+                renderBijlageList();
+            } catch (error) {
+                console.error('Kon bijlage niet toevoegen:', error);
+                showToast('Fout', 'Bestand kon niet worden toegevoegd: ' + (error.message || error), 'error');
+            }
         }
 
         function removeExistingBijlage(name) {
@@ -1226,15 +1253,38 @@
             bijlageFileList.innerHTML = items.join('');
         }
 
-        function appendBijlagenToFormData(formData, { isUpdate = false, appendMode = 'plus' } = {}) {
+        function getRecordFormPayload() {
+            syncOmschrijvingToHidden();
+            const formData = new FormData(dataForm);
+            return {
+                titel: formData.get('titel') || '',
+                status: formData.get('status') || '',
+                soort: formData.get('soort') || '',
+                kenmerk: formData.get('kenmerk') || '',
+                betrokkene: formData.get('betrokkene') || '',
+                dataset: formData.get('dataset') || '',
+                omschrijving: formData.get('omschrijving') || ''
+            };
+        }
+
+        function buildBijlagePayload({ isUpdate = false, appendMode = 'plus' } = {}) {
+            const payload = {};
             if (isUpdate) {
-                bijlageState.removed.forEach(name => formData.append('bijlage-', name));
-                // PocketBase >= 0.23: "bijlage+" appends. Older servers ignore "+" and need plain "bijlage".
-                const fieldName = appendMode === 'plain' ? 'bijlage' : 'bijlage+';
-                bijlageState.pending.forEach(({ file }) => formData.append(fieldName, file));
-                return;
+                if (bijlageState.removed.length) {
+                    payload['bijlage-'] = [...bijlageState.removed];
+                }
+                if (bijlageState.pending.length) {
+                    const files = bijlageState.pending.map(({ file }) => file);
+                    // PocketBase >= 0.23: "bijlage+" appends. Older servers ignore "+" and need plain "bijlage".
+                    payload[appendMode === 'plain' ? 'bijlage' : 'bijlage+'] = files.length === 1 ? files[0] : files;
+                }
+                return payload;
             }
-            bijlageState.pending.forEach(({ file }) => formData.append('bijlage', file));
+            if (bijlageState.pending.length) {
+                const files = bijlageState.pending.map(({ file }) => file);
+                payload.bijlage = files.length === 1 ? files[0] : files;
+            }
+            return payload;
         }
 
         function expectedBijlageCountAfterSave() {
@@ -1497,6 +1547,10 @@
             const editingId = state.editingId;
             const pendingCount = bijlageState.pending.length;
             const expectedBijlagen = expectedBijlageCountAfterSave();
+            const payload = {
+                ...getRecordFormPayload(),
+                ...buildBijlagePayload({ isUpdate: Boolean(editingId), appendMode: 'plus' })
+            };
 
             try {
                 setFormButtonsDisabled(true);
@@ -1506,16 +1560,16 @@
                 }
 
                 if (editingId) {
-                    const formData = new FormData(dataForm);
-                    appendBijlagenToFormData(formData, { isUpdate: true, appendMode: 'plus' });
-                    let savedRecord = await pb.collection(COLLECTION_NAME).update(editingId, formData);
+                    let savedRecord = await pb.collection(COLLECTION_NAME).update(editingId, payload);
 
                     // Fallback for PocketBase < 0.23: "bijlage+" is ignored (no error), plain "bijlage" appends.
                     // Only retry when none of the pending files were stored (avoid replace-semantics on newer PB).
                     if (pendingCount > 0 && getBijlagen(savedRecord).length === bijlageState.existing.length) {
-                        const fallbackData = new FormData(dataForm);
-                        appendBijlagenToFormData(fallbackData, { isUpdate: true, appendMode: 'plain' });
-                        savedRecord = await pb.collection(COLLECTION_NAME).update(editingId, fallbackData);
+                        const fallbackPayload = {
+                            ...getRecordFormPayload(),
+                            ...buildBijlagePayload({ isUpdate: true, appendMode: 'plain' })
+                        };
+                        savedRecord = await pb.collection(COLLECTION_NAME).update(editingId, fallbackPayload);
                     }
 
                     if (pendingCount > 0 && getBijlagen(savedRecord).length < expectedBijlagen) {
@@ -1535,9 +1589,7 @@
                         renderTable();
                     }
                 } else {
-                    const formData = new FormData(dataForm);
-                    appendBijlagenToFormData(formData, { isUpdate: false });
-                    const created = await pb.collection(COLLECTION_NAME).create(formData);
+                    const created = await pb.collection(COLLECTION_NAME).create(payload);
 
                     if (pendingCount > 0 && getBijlagen(created).length < pendingCount) {
                         throw new Error('Record is aangemaakt, maar bijlagen ontbreken. Controleer het file-veld "bijlage" in PocketBase.');
