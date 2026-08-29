@@ -1,0 +1,2223 @@
+<!DOCTYPE html>
+<html lang="nl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Registratie & Beheer</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: {
+                            750: '#2d3748',
+                            850: '#1a202c',
+                            900: '#111827',
+                            950: '#0b0f19',
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- PocketBase SDK -->
+    <script src="https://unpkg.com/pocketbase/dist/pocketbase.umd.js"></script>
+    <!-- CodeMirror 5 -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.18/codemirror.min.js"></script>
+    <style>
+        /* Custom scrollbar for dark mode */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #111827; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4B5563; }
+        .hidden-col { display: none !important; }
+        
+        /* Zorgt voor een pointer cursor op de rijen */
+        tbody tr { cursor: pointer; }
+        tbody tr.is-pinned { background: rgba(245, 158, 11, 0.08); }
+        tbody tr.is-pinned:hover { background: rgba(245, 158, 11, 0.14); }
+        tbody tr.is-pinned.bg-blue-900\/20 { background: rgba(37, 99, 235, 0.22); }
+        .btn-row-action {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0.25rem;
+            border-radius: 0.35rem;
+            transition: color 0.15s, opacity 0.15s, background 0.15s;
+        }
+        .btn-row-action:hover { background: rgba(55, 65, 81, 0.55); }
+        .btn-row-pin.is-pinned { color: #fbbf24; opacity: 1 !important; }
+        .btn-row-pin:not(.is-pinned) { color: #6b7280; }
+        .btn-row-pin:not(.is-pinned):hover { color: #fbbf24; }
+
+        .field-with-copy { display: flex; gap: 0.5rem; align-items: stretch; }
+        .field-with-copy.field-flexible { align-items: flex-start; }
+        .field-with-copy.field-flexible > input,
+        .field-with-copy.field-flexible > textarea,
+        .field-with-copy.field-flexible > select,
+        .field-with-copy.field-flexible > .oms-field-stack { flex: 1; min-width: 0; width: 100%; }
+        .field-with-copy.field-fixed > input,
+        .field-with-copy.field-fixed > select { width: 14rem; max-width: 14rem; flex: 0 0 14rem; }
+        .field-fixed-input { width: 14rem; max-width: 14rem; }
+        .btn-copy {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.5rem;
+            height: 2.5rem;
+            background: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 0.5rem;
+            color: #9ca3af;
+            transition: color 0.15s, background 0.15s, border-color 0.15s;
+        }
+        .btn-copy:hover { background: #374151; color: #60a5fa; border-color: #4b5563; }
+        .btn-copy:active { transform: scale(0.95); }
+
+        .field-toolbar {
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
+            flex-shrink: 0;
+        }
+        .btn-field-tool {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.5rem;
+            height: 2.5rem;
+            background: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 0.5rem;
+            color: #9ca3af;
+            font-size: 1rem;
+            line-height: 1;
+            transition: color 0.15s, background 0.15s, border-color 0.15s;
+        }
+        .btn-field-tool:hover { background: #374151; color: #60a5fa; border-color: #4b5563; }
+        .btn-field-tool:active { transform: scale(0.95); }
+        .oms-field-stack { display: flex; flex-direction: column; position: relative; }
+        .oms-cm-host {
+            min-height: 27rem;
+            max-height: 72rem;
+            overflow: hidden;
+            background: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 0.5rem;
+            transition: box-shadow 0.15s, border-color 0.15s;
+        }
+        .oms-cm-host:focus-within {
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+            border-color: transparent;
+        }
+        .oms-cm-host .CodeMirror {
+            height: 27rem;
+            max-height: 72rem;
+            font-size: 0.8125rem;
+            background: transparent;
+            color: #e5e7eb;
+            font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        }
+        .oms-cm-host .CodeMirror-scroll { min-height: 27rem; }
+        .oms-cm-host .CodeMirror-gutters {
+            background: #111827;
+            border-right: 1px solid #374151;
+        }
+        .oms-cm-host .CodeMirror-linenumber { color: #6b7280; }
+        .oms-cm-host .CodeMirror-cursor { border-left: 1px solid #93c5fd; }
+        .oms-cm-host .CodeMirror-selected { background: rgba(59, 130, 246, 0.35); }
+        .oms-cm-host .CodeMirror-focused .CodeMirror-selected { background: rgba(59, 130, 246, 0.4); }
+        .oms-cm-host .CodeMirror-line { line-height: 1.55; }
+        .oms-cm-host .CodeMirror-activeline-background { background: rgba(55, 65, 81, 0.35); }
+        .oms-visual {
+            min-height: 27rem;
+            max-height: 72rem;
+            overflow-y: auto;
+            background: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 0.5rem;
+            padding: 0.65rem 0.9rem;
+            color: #e5e7eb;
+            font-size: 0.875rem;
+            line-height: 1.55;
+        }
+        .oms-visual:focus-within {
+            box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.5);
+            border-color: transparent;
+        }
+        .oms-visual-empty {
+            color: #6b7280;
+            font-style: italic;
+        }
+        .oms-visual-line {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.4rem;
+            min-height: 1.55rem;
+            padding: 0.1rem 0;
+        }
+        .oms-visual-prefix {
+            flex-shrink: 0;
+            width: 1.1rem;
+            text-align: center;
+            color: #9ca3af;
+            user-select: none;
+            line-height: 1.55rem;
+        }
+        .oms-visual-text {
+            flex: 1;
+            min-width: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .oms-visual-check {
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.15rem;
+            height: 1.15rem;
+            margin-top: 0.15rem;
+            cursor: pointer;
+            user-select: none;
+            color: #9ca3af;
+            font-size: 0.95rem;
+            line-height: 1;
+            border-radius: 0.2rem;
+            transition: color 0.15s, background 0.15s;
+        }
+        .oms-visual-check:hover { background: rgba(55, 65, 81, 0.6); }
+        .oms-visual-check.checked {
+            color: #22c55e;
+            font-weight: 700;
+        }
+        .btn-field-tool.active { color: #60a5fa; border-color: #3b82f6; background: rgba(37, 99, 235, 0.12); }
+
+        #data-table { table-layout: auto; width: 100%; }
+        #data-table th[data-col],
+        #data-table td[data-col] { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        #data-table th[data-col]:not([data-col="omschrijving"]),
+        #data-table td[data-col]:not([data-col="omschrijving"]) { width: 1%; }
+        #data-table th[data-col="omschrijving"],
+        #data-table td[data-col="omschrijving"] { width: auto; min-width: 8rem; max-width: 28rem; }
+        #data-table th[data-col] { position: relative; }
+        #data-table th,
+        #data-table td { padding: 0.35rem 0.65rem; }
+        .col-resizer {
+            position: absolute;
+            top: 0;
+            right: 0;
+            width: 6px;
+            height: 100%;
+            cursor: col-resize;
+            z-index: 5;
+            transition: background 0.15s;
+        }
+        .col-resizer:hover,
+        .col-resizer.dragging { background: rgba(59, 130, 246, 0.45); }
+
+        .th-sort-wrap { display: flex; align-items: center; gap: 0.25rem; min-width: 0; padding-right: 0.75rem; }
+        .col-sort-btn {
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.35rem;
+            height: 1.35rem;
+            border-radius: 0.35rem;
+            color: #6b7280;
+            transition: color 0.15s, background 0.15s;
+        }
+        .col-sort-btn:hover { background: rgba(55, 65, 81, 0.8); color: #93c5fd; }
+        .col-sort-btn.active { color: #60a5fa; background: rgba(37, 99, 235, 0.15); }
+        .col-sort-btn svg { width: 0.875rem; height: 0.875rem; }
+
+        #data-table td[data-col="bijlage"] { white-space: normal; overflow: visible; text-overflow: clip; }
+        .bijlage-cell-stack {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 2rem;
+            padding: 0.05rem 0;
+        }
+        .bijlage-thumb-stack {
+            display: inline-flex;
+            align-items: center;
+        }
+        .bijlage-thumb-wrap {
+            display: inline-flex;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 1;
+            transition: transform 0.15s, z-index 0s;
+        }
+        .bijlage-thumb-stack .bijlage-thumb-wrap:hover {
+            z-index: 10;
+            transform: translateY(-2px) scale(1.05);
+        }
+        .bijlage-thumb-stack .bijlage-thumb-wrap + .bijlage-thumb-wrap {
+            margin-left: -0.65rem;
+        }
+        .bijlage-thumb {
+            width: 2.25rem;
+            height: 2.25rem;
+            object-fit: cover;
+            border-radius: 0.45rem;
+            border: 2px solid #111827;
+            background: #111827;
+            box-shadow: 0 0 0 1px #374151;
+            transition: border-color 0.15s;
+        }
+        .bijlage-thumb-wrap:hover .bijlage-thumb { border-color: #3b82f6; }
+        .bijlage-thumb-fallback {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.25rem;
+            height: 2.25rem;
+            border-radius: 0.45rem;
+            border: 2px solid #111827;
+            background: #1f2937;
+            color: #60a5fa;
+            box-shadow: 0 0 0 1px #374151;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .bijlage-thumb-fallback:hover { border-color: #3b82f6; background: #374151; }
+        .bijlage-overflow {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 2rem;
+            height: 2rem;
+            margin-left: 0.15rem;
+            padding: 0 0.4rem;
+            border-radius: 9999px;
+            background: #1f2937;
+            border: 1px solid #374151;
+            color: #9ca3af;
+            font-size: 0.7rem;
+            font-weight: 600;
+            cursor: default;
+        }
+
+        .bijlage-dropzone {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            width: 100%;
+            min-height: 5.5rem;
+            padding: 1rem;
+            border: 1.5px dashed #374151;
+            border-radius: 0.75rem;
+            background: rgba(17, 24, 39, 0.55);
+            text-align: center;
+            cursor: pointer;
+            transition: border-color 0.15s, background 0.15s;
+        }
+        .bijlage-dropzone:hover,
+        .bijlage-dropzone.is-dragover {
+            border-color: #3b82f6;
+            background: rgba(37, 99, 235, 0.08);
+        }
+        .bijlage-dropzone-icon { width: 1.5rem; height: 1.5rem; color: #6b7280; }
+        .bijlage-dropzone.is-dragover .bijlage-dropzone-icon { color: #60a5fa; }
+        .bijlage-file-list {
+            display: flex;
+            flex-direction: column;
+            gap: 0.45rem;
+            margin-top: 0.65rem;
+        }
+        .bijlage-file-list:empty { display: none; }
+        .bijlage-item {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.45rem 0.55rem;
+            border: 1px solid #374151;
+            border-radius: 0.6rem;
+            background: #111827;
+        }
+        .bijlage-item.is-pending { border-color: rgba(59, 130, 246, 0.35); background: rgba(37, 99, 235, 0.06); }
+        .bijlage-item-preview {
+            flex-shrink: 0;
+            width: 2.5rem;
+            height: 2.5rem;
+            border-radius: 0.45rem;
+            overflow: hidden;
+            border: 1px solid #374151;
+            background: #1f2937;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #60a5fa;
+        }
+        .bijlage-item-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .bijlage-item-info {
+            flex: 1;
+            min-width: 0;
+        }
+        .bijlage-item-name {
+            display: block;
+            font-size: 0.8rem;
+            color: #e5e7eb;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .bijlage-item-meta {
+            display: block;
+            font-size: 0.68rem;
+            color: #6b7280;
+            margin-top: 0.1rem;
+        }
+        .bijlage-item.is-pending .bijlage-item-meta { color: #60a5fa; }
+        .bijlage-item-remove {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.65rem;
+            height: 1.65rem;
+            border-radius: 0.4rem;
+            border: 1px solid transparent;
+            background: transparent;
+            color: #6b7280;
+            transition: color 0.15s, background 0.15s, border-color 0.15s;
+        }
+        .bijlage-item-remove:hover {
+            color: #f87171;
+            background: rgba(239, 68, 68, 0.1);
+            border-color: rgba(239, 68, 68, 0.25);
+        }
+
+        #sidebar {
+            width: 384px;
+            min-width: 280px;
+            max-width: 700px;
+            flex-shrink: 0;
+        }
+        .sidebar-resizer {
+            position: absolute;
+            top: 0;
+            right: -3px;
+            width: 6px;
+            height: 100%;
+            cursor: col-resize;
+            z-index: 20;
+            transition: background 0.15s;
+        }
+        .sidebar-resizer:hover,
+        .sidebar-resizer.dragging { background: rgba(59, 130, 246, 0.45); }
+        body.is-resizing { cursor: col-resize !important; user-select: none; }
+        body.is-resizing * { cursor: col-resize !important; }
+
+        .form-header-top {
+            display: flex;
+            align-items: flex-start;
+            justify-content: space-between;
+            gap: 1rem;
+        }
+        .form-header-dataset {
+            flex-shrink: 0;
+            width: 10rem;
+        }
+        .form-header-dataset .field-with-copy > input {
+            width: 100%;
+            max-width: 100%;
+            flex: 1;
+            min-width: 0;
+            font-weight: 500;
+        }
+        #input-status {
+            font-weight: 500;
+        }
+        #input-status option { color: #d1d5db; background: #1f2937; }
+        #input-status option[value="Nieuw"] { color: #60a5fa; }
+        #input-status option[value="In uitvoering"] { color: #facc15; }
+        #input-status option[value="Wachtend"] { color: #fb923c; }
+        #input-status option[value="Afgerond"] { color: #4ade80; }
+        #input-status option[value="Ter info"] { color: #c084fc; }
+        #input-status option[value="Archief"] { color: #9ca3af; }
+
+        .form-row-titel-status {
+            display: flex;
+            align-items: flex-start;
+            gap: 0.75rem;
+        }
+        .form-field-titel {
+            flex: 1;
+            min-width: 0;
+        }
+        .form-field-status {
+            flex-shrink: 0;
+            width: 9.5rem;
+        }
+        .form-field-titel .field-with-copy > input,
+        .form-field-status .field-with-copy > select {
+            width: 100%;
+            max-width: 100%;
+            flex: 1;
+            min-width: 0;
+        }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-200 h-screen overflow-hidden flex font-sans selection:bg-blue-500/30">
+
+    <!-- Notificatie Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <!-- LINKER KOLOM: Invoer & Wijzigen -->
+    <aside id="sidebar" class="relative bg-gray-900 border-r border-gray-800 flex flex-col h-full z-10 shadow-xl">
+        <div id="sidebar-resizer" class="sidebar-resizer" title="Sleep om breedte aan te passen"></div>
+        <div class="px-6 py-2.5 border-b border-gray-800 bg-gray-950/60 flex items-center gap-4">
+            <a id="pb-admin-link" href="#" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-400 transition-colors" title="Open PocketBase beheer">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
+                PocketBase Admin
+            </a>
+            <a href="bijlagen.html" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-400 transition-colors" title="Bekijk alle bijlagen in een galerij">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                Bijlagen galerij
+            </a>
+        </div>
+        <div class="p-6 border-b border-gray-800 transition-colors duration-300" id="form-header-bg">
+            <div class="form-header-top">
+                <div class="min-w-0">
+                    <h1 id="form-title" class="text-xl font-bold text-white flex items-center gap-2">
+                        <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Nieuwe Invoer
+                    </h1>
+                    <p id="form-subtitle" class="text-sm text-gray-400 mt-1">Sla gegevens direct op in PocketBase</p>
+                </div>
+                <div class="form-header-dataset">
+                    <label class="block text-xs font-medium text-gray-400 mb-1">Dataset</label>
+                    <div class="field-with-copy">
+                        <input type="text" name="dataset" id="input-dataset" form="data-form" list="datalist-dataset" autocomplete="off" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" placeholder="Dataset...">
+                        <button type="button" class="btn-copy" onclick="copyFieldValue('input-dataset')" title="Kopieer naar klembord">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        </button>
+                    </div>
+                    <datalist id="datalist-dataset"></datalist>
+                </div>
+            </div>
+        </div>
+
+        <div class="p-6 overflow-y-auto flex-1 custom-scrollbar">
+            <form id="data-form" class="space-y-4">
+                <!-- Titel & Status -->
+                <div class="form-row-titel-status">
+                    <div class="form-field-titel">
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Titel</label>
+                        <div class="field-with-copy">
+                            <input type="text" name="titel" id="input-titel" required autocomplete="off" class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors placeholder-gray-500" placeholder="Korte titel...">
+                            <button type="button" class="btn-copy" onclick="copyFieldValue('input-titel')" title="Kopieer naar klembord">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="form-field-status">
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Status</label>
+                        <div class="field-with-copy">
+                            <select name="status" id="input-status" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none">
+                                <option value="Nieuw">Nieuw</option>
+                                <option value="In uitvoering">In uitvoering</option>
+                                <option value="Wachtend">Wachtend</option>
+                                <option value="Afgerond">Afgerond</option>
+                                <option value="Ter info">Ter info</option>
+                                <option value="Archief">Archief</option>
+                            </select>
+                            <button type="button" class="btn-copy" onclick="copyFieldValue('input-status')" title="Kopieer naar klembord">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Soort -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Soort</label>
+                    <div class="field-with-copy field-fixed">
+                        <input type="text" name="soort" id="input-soort" list="datalist-soort" required autocomplete="off" class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" placeholder="Kies of typ een soort...">
+                        <button type="button" class="btn-copy" onclick="copyFieldValue('input-soort')" title="Kopieer naar klembord">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        </button>
+                    </div>
+                    <datalist id="datalist-soort"></datalist>
+                </div>
+
+                <!-- Kenmerk -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Kenmerk</label>
+                    <div class="field-with-copy field-fixed">
+                        <input type="text" name="kenmerk" id="input-kenmerk" list="datalist-kenmerk" autocomplete="off" class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" placeholder="Kies of typ een kenmerk...">
+                        <button type="button" class="btn-copy" onclick="copyFieldValue('input-kenmerk')" title="Kopieer naar klembord">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        </button>
+                    </div>
+                    <datalist id="datalist-kenmerk"></datalist>
+                </div>
+
+                <!-- Betrokkene -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Betrokkene</label>
+                    <div class="field-with-copy field-fixed">
+                        <input type="text" name="betrokkene" id="input-betrokkene" list="datalist-betrokkene" autocomplete="off" class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" placeholder="Kies of typ een betrokkene...">
+                        <button type="button" class="btn-copy" onclick="copyFieldValue('input-betrokkene')" title="Kopieer naar klembord">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                        </button>
+                    </div>
+                    <datalist id="datalist-betrokkene"></datalist>
+                </div>
+
+                <!-- Bijlagen -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">
+                        Bijlagen
+                        <span id="bijlage-count-badge" class="hidden text-xs text-gray-500 font-normal ml-1"></span>
+                    </label>
+                    <div id="bijlage-dropzone" class="bijlage-dropzone" role="button" tabindex="0" aria-label="Bestanden toevoegen">
+                        <svg class="bijlage-dropzone-icon" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.75" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"></path></svg>
+                        <p class="text-sm text-gray-400 leading-snug">Sleep bestanden hierheen</p>
+                        <button type="button" id="btn-bijlage-pick" class="text-sm text-blue-400 hover:text-blue-300 underline-offset-2 hover:underline">of klik om te kiezen</button>
+                    </div>
+                    <input type="file" id="input-bijlage" multiple class="sr-only" tabindex="-1" aria-hidden="true">
+                    <div id="bijlage-file-list" class="bijlage-file-list"></div>
+                    <p id="file-help-text" class="text-xs text-blue-400 mt-2 hidden">Bestaande bijlagen blijven behouden tenzij je ze verwijdert.</p>
+                </div>
+
+                <!-- Omschrijving -->
+                <div>
+                    <label class="block text-sm font-medium text-gray-300 mb-1">Omschrijving</label>
+                    <div class="field-with-copy field-flexible">
+                        <div class="oms-field-stack">
+                            <div id="omschrijving-cm-host" class="oms-cm-host"></div>
+                            <div id="omschrijving-visual" class="oms-visual hidden" aria-label="Visuele weergave"></div>
+                        </div>
+                        <textarea name="omschrijving" id="input-omschrijving" required class="sr-only" tabindex="-1" aria-hidden="true"></textarea>
+                        <div class="field-toolbar">
+                            <button type="button" class="btn-field-tool" onclick="copyFieldValue('input-omschrijving')" title="Kopieer naar klembord">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            </button>
+                            <button type="button" class="btn-field-tool" id="btn-omschrijving-bullet" title="Bullet toevoegen">•</button>
+                            <button type="button" class="btn-field-tool" id="btn-omschrijving-check" title="Afvinkvakje toevoegen">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                            </button>
+                            <button type="button" class="btn-field-tool" id="btn-omschrijving-mode" title="Visuele weergave">&lt;&gt;</button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+
+        <div class="p-6 border-t border-gray-800 bg-gray-900 flex flex-col gap-3" id="form-actions">
+            <div id="btn-row-new">
+                <button id="btn-submit" type="button" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                    <span>Opslaan in Database</span>
+                </button>
+            </div>
+            <div id="btn-row-edit" class="hidden flex flex-col gap-3">
+                <div class="flex gap-3">
+                    <button id="btn-save-stay" type="button" class="flex-1 bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-yellow-900/20">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+                        <span id="btn-save-stay-text">Opslaan</span>
+                    </button>
+                    <button id="btn-save-close" type="button" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2 shadow-lg shadow-blue-900/20">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg>
+                        <span id="btn-save-close-text">Wijzigen en sluiten</span>
+                    </button>
+                </div>
+                <button id="btn-cancel-edit" type="button" class="w-full bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 font-medium py-2.5 px-4 rounded-lg transition-colors flex items-center justify-center gap-2">
+                    Annuleren
+                </button>
+            </div>
+        </div>
+    </aside>
+
+    <!-- RECHTER KOLOM: Overzicht & Zoeken -->
+    <main class="flex-1 flex flex-col h-full bg-gray-950 relative">
+        <!-- Top Bar (z-30 ensures dropdowns overlap the table container) -->
+        <header class="h-20 border-b border-gray-800 px-8 flex items-center justify-between bg-gray-900/50 backdrop-blur-sm relative z-30">
+            <h2 class="text-xl font-medium text-white">Database Records</h2>
+            
+            <div class="flex items-center gap-4">
+                <!-- Zoekveld -->
+                <div class="relative group">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="w-5 h-5 text-gray-500 group-focus-within:text-blue-500 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <input type="text" id="search-input" placeholder="Zoek in alle velden..." class="w-64 bg-gray-900 border border-gray-700 rounded-full pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all focus:w-80 placeholder-gray-500 shadow-inner">
+                </div>
+
+                <!-- Filter Knop -->
+                <div class="relative">
+                    <button id="btn-filter-toggle" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"></path></svg>
+                        Filters
+                        <span id="active-filter-badge" class="hidden bg-blue-500 text-white text-xs rounded-full w-5 h-5 flex items-center justify-center ml-1">1</span>
+                    </button>
+
+                    <!-- Filter Dropdown Panel -->
+                    <div id="filter-panel" class="hidden absolute right-0 mt-2 w-80 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-40 overflow-hidden">
+                        <div class="p-4 border-b border-gray-700 bg-gray-850">
+                            <h3 class="font-medium text-white">Opgeslagen Filters</h3>
+                            <p class="text-xs text-gray-500 mt-1">Vink filters aan; meerdere selecties combineren met EN.</p>
+                            <ul id="saved-filters-list" class="mt-2 space-y-1 max-h-32 overflow-y-auto">
+                                <!-- Filled by JS -->
+                            </ul>
+                        </div>
+                        <div class="p-4">
+                            <h3 class="font-medium text-white mb-3 text-sm">Nieuw Filter Maken</h3>
+                            <div class="space-y-2">
+                                <select id="filter-field" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                                    <option value="titel">Titel</option>
+                                    <option value="omschrijving">Omschrijving</option>
+                                    <option value="soort">Soort</option>
+                                    <option value="kenmerk">Kenmerk</option>
+                                    <option value="dataset">Dataset</option>
+                                    <option value="betrokkene">Betrokkene</option>
+                                    <option value="status">Status</option>
+                                </select>
+                                <select id="filter-operator" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                                    <option value="~">Bevat (gedeeltelijk)</option>
+                                    <option value="=">Is gelijk aan</option>
+                                    <option value="!=">Is niet gelijk aan</option>
+                                </select>
+                                <input type="text" id="filter-value" placeholder="Waarde..." class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
+                            </div>
+                            <div class="mt-3 flex gap-2">
+                                <button id="btn-apply-filter" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-xs py-1.5 rounded transition-colors">Toepassen</button>
+                                <button id="btn-save-filter" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white text-xs py-1.5 rounded transition-colors">Opslaan</button>
+                            </div>
+                            <button id="btn-clear-filter" class="w-full mt-2 text-gray-400 hover:text-white text-xs py-1 transition-colors underline">Filters wissen</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Kolommen Knop -->
+                <div class="relative">
+                    <button id="btn-cols-toggle" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2"></path></svg>
+                        Kolommen
+                    </button>
+                    <!-- Kolommen Dropdown -->
+                    <div id="cols-panel" class="hidden absolute right-0 mt-2 w-48 bg-gray-800 border border-gray-700 rounded-xl shadow-2xl z-40 overflow-hidden p-3">
+                        <h3 class="font-medium text-white mb-2 text-sm border-b border-gray-700 pb-2">Zichtbare velden</h3>
+                        <div id="col-checkboxes" class="space-y-2 mt-2">
+                            <!-- Ingevuld door JS -->
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Datatable Container -->
+        <div class="flex-1 overflow-auto p-8 relative z-0">
+            
+            <!-- Loading overlay -->
+            <div id="loading-overlay" class="absolute inset-0 bg-gray-950/50 backdrop-blur-sm flex items-center justify-center z-10 hidden">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-500"></div>
+            </div>
+
+            <div class="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl overflow-hidden">
+                <table id="data-table" class="w-full text-left border-collapse text-sm">
+                    <thead class="bg-gray-850/80 text-gray-400 text-xs uppercase tracking-wider sticky top-0 z-10 backdrop-blur-md">
+                        <tr>
+                            <th data-col="dataset" class="font-semibold border-b border-gray-800">Dataset</th>
+                            <th data-col="titel" class="font-semibold border-b border-gray-800">Titel</th>
+                            <th data-col="soort" class="font-semibold border-b border-gray-800">Soort</th>
+                            <th data-col="omschrijving" class="font-semibold border-b border-gray-800">Omschrijving</th>
+                            <th data-col="kenmerk" class="font-semibold border-b border-gray-800">Kenmerk</th>
+                            <th data-col="betrokkene" class="font-semibold border-b border-gray-800">Betrokkene</th>
+                            <th data-col="status" class="font-semibold border-b border-gray-800">Status</th>
+                            <th data-col="bijlage" class="font-semibold border-b border-gray-800 text-center">Bijlagen</th>
+                            <th data-col="created" class="font-semibold border-b border-gray-800 whitespace-nowrap">Aangemaakt</th>
+                            <th data-col="updated" class="font-semibold border-b border-gray-800 whitespace-nowrap">Gewijzigd</th>
+                            <th class="font-semibold border-b border-gray-800 w-16"></th> <!-- Acties -->
+                        </tr>
+                    </thead>
+                    <tbody id="table-body">
+                        <!-- Rijen worden hier dynamisch ingeladen -->
+                    </tbody>
+                </table>
+                <div id="empty-state" class="hidden flex flex-col items-center justify-center py-16 text-gray-500">
+                    <svg class="w-16 h-16 mb-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
+                    <p class="text-lg">Geen records gevonden</p>
+                    <p class="text-sm mt-1">Pas je zoekopdracht of filters aan, of voeg links een nieuw record toe.</p>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // --- Configuratie ---
+        const PB_URL = 'http://127.0.0.1:8090';
+        const COLLECTION_NAME = 'registraties';
+        
+        let pb;
+        try {
+            pb = new PocketBase(PB_URL);
+        } catch (e) {
+            console.error("PocketBase SDK kon niet laden:", e);
+        }
+
+        // --- State Management ---
+        const DEFAULT_COLUMN_WIDTHS = {};
+
+        const state = {
+            records: [],
+            searchQuery: '',
+            activeFilterStr: '',
+            activeSavedFilterIds: JSON.parse(localStorage.getItem('pbApp_activeSavedFilterIds') || '[]'),
+            pinnedRecordIds: JSON.parse(localStorage.getItem('pbApp_pinnedRecordIds') || '[]'),
+            editingId: null, // Toegevoegd voor bewerkingsmodus
+            sortField: 'created',
+            sortDirection: 'desc',
+            savedFilters: JSON.parse(localStorage.getItem('pbApp_savedFilters') || '[]').map((f, i) => ({
+                id: f.id || `sf-${Date.now()}-${i}`,
+                name: f.name,
+                filter: f.filter
+            })),
+            columns: [
+                { id: 'dataset', label: 'Dataset', visible: true },
+                { id: 'titel', label: 'Titel', visible: true },
+                { id: 'soort', label: 'Soort', visible: true },
+                { id: 'omschrijving', label: 'Omschrijving', visible: true },
+                { id: 'kenmerk', label: 'Kenmerk', visible: true },
+                { id: 'betrokkene', label: 'Betrokkene', visible: true },
+                { id: 'status', label: 'Status', visible: true },
+                { id: 'bijlage', label: 'Bijlagen', visible: true },
+                { id: 'created', label: 'Aangemaakt', visible: true },
+                { id: 'updated', label: 'Gewijzigd', visible: true },
+            ]
+        };
+
+        // Migreer oude opgeslagen filters naar id's en verwijder verouderde actieve selecties
+        const rawSavedFilters = JSON.parse(localStorage.getItem('pbApp_savedFilters') || '[]');
+        if (rawSavedFilters.some(f => !f.id)) {
+            localStorage.setItem('pbApp_savedFilters', JSON.stringify(state.savedFilters));
+        }
+        const validFilterIds = new Set(state.savedFilters.map(f => f.id));
+        const cleanedActiveFilterIds = state.activeSavedFilterIds.filter(id => validFilterIds.has(id));
+        if (cleanedActiveFilterIds.length !== state.activeSavedFilterIds.length) {
+            state.activeSavedFilterIds = cleanedActiveFilterIds;
+            localStorage.setItem('pbApp_activeSavedFilterIds', JSON.stringify(state.activeSavedFilterIds));
+        }
+
+        const savedWidths = JSON.parse(localStorage.getItem('pbApp_columnWidths_v2') || 'null');
+        state.columnWidths = { ...DEFAULT_COLUMN_WIDTHS, ...(savedWidths || {}) };
+
+        const savedSort = JSON.parse(localStorage.getItem('pbApp_sort') || 'null');
+        if (savedSort?.field) state.sortField = savedSort.field;
+        if (savedSort?.direction) state.sortDirection = savedSort.direction;
+
+        // Herstel opgeslagen kolom voorkeuren
+        const savedCols = JSON.parse(localStorage.getItem('pbApp_columns'));
+        if (savedCols) {
+            state.columns.forEach(col => {
+                if (savedCols[col.id] !== undefined) col.visible = savedCols[col.id];
+            });
+        }
+
+        // --- DOM Elementen ---
+        const tableBody = document.getElementById('table-body');
+        const emptyState = document.getElementById('empty-state');
+        const searchInput = document.getElementById('search-input');
+        const loadingOverlay = document.getElementById('loading-overlay');
+        
+        const filterToggle = document.getElementById('btn-filter-toggle');
+        const filterPanel = document.getElementById('filter-panel');
+        const filterBadge = document.getElementById('active-filter-badge');
+        
+        const colsToggle = document.getElementById('btn-cols-toggle');
+        const colsPanel = document.getElementById('cols-panel');
+        const colCheckboxesContainer = document.getElementById('col-checkboxes');
+
+        // --- Formulier Elementen ---
+        const dataForm = document.getElementById('data-form');
+        const formTitle = document.getElementById('form-title');
+        const formSubtitle = document.getElementById('form-subtitle');
+        const formHeaderBg = document.getElementById('form-header-bg');
+        const btnSubmit = document.getElementById('btn-submit');
+        const btnRowNew = document.getElementById('btn-row-new');
+        const btnRowEdit = document.getElementById('btn-row-edit');
+        const btnSaveStay = document.getElementById('btn-save-stay');
+        const btnSaveClose = document.getElementById('btn-save-close');
+        const btnCancelEdit = document.getElementById('btn-cancel-edit');
+        const btnSaveStayText = document.getElementById('btn-save-stay-text');
+        const btnSaveCloseText = document.getElementById('btn-save-close-text');
+        const fileHelpText = document.getElementById('file-help-text');
+        const bijlageDropzone = document.getElementById('bijlage-dropzone');
+        const bijlageFileList = document.getElementById('bijlage-file-list');
+        const bijlageCountBadge = document.getElementById('bijlage-count-badge');
+        const inputBijlage = document.getElementById('input-bijlage');
+        const btnBijlagePick = document.getElementById('btn-bijlage-pick');
+
+        const bijlageState = {
+            record: null,
+            existing: [],
+            removed: [],
+            pending: []
+        };
+
+        const SUGGESTION_FIELDS = ['soort', 'kenmerk', 'dataset', 'betrokkene'];
+
+        const DATASET_TEXT_COLORS = [
+            'text-blue-400',
+            'text-yellow-400',
+            'text-green-400',
+            'text-purple-400',
+            'text-cyan-400',
+            'text-orange-400',
+            'text-pink-400',
+            'text-teal-400',
+            'text-indigo-400',
+            'text-amber-400',
+            'text-rose-400',
+            'text-lime-400',
+        ];
+
+        function getDatasetColorClass(dataset) {
+            if (!dataset?.trim()) return 'text-gray-500';
+            const normalized = dataset.trim().toLowerCase();
+            let hash = 0;
+            for (let i = 0; i < normalized.length; i++) {
+                hash = normalized.charCodeAt(i) + ((hash << 5) - hash);
+            }
+            return DATASET_TEXT_COLORS[Math.abs(hash) % DATASET_TEXT_COLORS.length];
+        }
+
+        function getStatusColorClass(status) {
+            switch (status) {
+                case 'Nieuw': return 'text-blue-400';
+                case 'In uitvoering': return 'text-yellow-400';
+                case 'Wachtend': return 'text-orange-400';
+                case 'Afgerond': return 'text-green-400';
+                case 'Ter info': return 'text-purple-400';
+                case 'Archief': return 'text-gray-400';
+                default: return 'text-gray-300';
+            }
+        }
+
+        const FORM_VALUE_COLOR_CLASSES = [
+            ...DATASET_TEXT_COLORS,
+            'text-blue-400',
+            'text-yellow-400',
+            'text-orange-400',
+            'text-green-400',
+            'text-purple-400',
+            'text-gray-400',
+            'text-gray-300',
+            'text-gray-500',
+            'text-white',
+        ];
+
+        function setFormFieldColor(el, colorClass) {
+            if (!el) return;
+            FORM_VALUE_COLOR_CLASSES.forEach(cls => el.classList.remove(cls));
+            el.classList.add(colorClass || 'text-white');
+        }
+
+        function syncDatasetInputColor() {
+            const input = document.getElementById('input-dataset');
+            if (!input) return;
+            const value = input.value.trim();
+            setFormFieldColor(input, value ? getDatasetColorClass(value) : 'text-white');
+        }
+
+        function syncStatusInputColor() {
+            const select = document.getElementById('input-status');
+            if (!select) return;
+            setFormFieldColor(select, getStatusColorClass(select.value));
+        }
+
+        function syncColoredFormFields() {
+            syncDatasetInputColor();
+            syncStatusInputColor();
+        }
+
+        function renderDatasetHTML(dataset) {
+            if (!dataset?.trim()) {
+                return '<span class="text-gray-500 italic pointer-events-none">-</span>';
+            }
+            const div = document.createElement('div');
+            div.innerText = dataset;
+            const colorClass = getDatasetColorClass(dataset);
+            return `<span class="${colorClass} font-medium pointer-events-none">${div.innerHTML}</span>`;
+        }
+
+        function savePinnedRecordIds() {
+            localStorage.setItem('pbApp_pinnedRecordIds', JSON.stringify(state.pinnedRecordIds));
+        }
+
+        function confirmAction(message) {
+            return window.confirm(message);
+        }
+
+        async function fetchPinnedRecords(extraFilter = '') {
+            if (!pb || state.pinnedRecordIds.length === 0) return [];
+
+            const idFilter = state.pinnedRecordIds
+                .map(id => `id="${id.replace(/"/g, '\\"')}"`)
+                .join(' || ');
+            if (!idFilter) return [];
+
+            const filter = extraFilter
+                ? `((${idFilter}) && (${extraFilter}))`
+                : `(${idFilter})`;
+
+            try {
+                const result = await pb.collection(COLLECTION_NAME).getList(1, state.pinnedRecordIds.length, {
+                    filter,
+                    requestKey: null
+                });
+                const byId = new Map(result.items.map(record => [record.id, record]));
+                return state.pinnedRecordIds.map(id => byId.get(id)).filter(Boolean);
+            } catch (error) {
+                console.warn('Kon vastgepinde records niet ophalen:', error);
+                return [];
+            }
+        }
+
+        function mergeRecordsWithPins(fetchedRecords, pinnedRecords) {
+            const pinnedIds = new Set(pinnedRecords.map(record => record.id));
+            const unpinned = fetchedRecords.filter(record => !pinnedIds.has(record.id));
+            return [...pinnedRecords, ...unpinned];
+        }
+
+        // --- Initialisatie ---
+        async function init() {
+            document.getElementById('pb-admin-link').href = `${PB_URL}/_/`;
+            setupSidebarResize();
+            setupTableSort();
+            setupColumnResize();
+            setupBijlageUpload();
+            await setupOmschrijvingEditor();
+            setupEventListeners();
+            renderColumnCheckboxes();
+            applyColumnVisibility();
+            renderSavedFilters();
+            updateFilterBadge();
+            syncColoredFormFields();
+            await fetchData();
+            await fetchSuggestions();
+        }
+
+        // --- Data Fetching & Rendering ---
+        async function fetchData() {
+            if (!pb) {
+                showToast("Fout", "PocketBase niet gevonden. Controleer verbinding.", "error");
+                return;
+            }
+
+            loadingOverlay.classList.remove('hidden');
+            
+            try {
+                // Bouw de filter string voor de API
+                let apiFilter = [];
+                
+                // 1. Zoekbalk filter
+                if (state.searchQuery) {
+                    const term = state.searchQuery.replace(/"/g, '\\"');
+                    apiFilter.push(`(titel ~ "${term}" || omschrijving ~ "${term}" || soort ~ "${term}" || kenmerk ~ "${term}" || dataset ~ "${term}" || betrokkene ~ "${term}")`);
+                }
+
+                // 2. Actieve opgeslagen filters (alle geselecteerde moeten matchen)
+                state.savedFilters
+                    .filter(f => state.activeSavedFilterIds.includes(f.id))
+                    .forEach(f => apiFilter.push(`(${f.filter})`));
+
+                // 3. Ad-hoc filter via het formulier
+                if (state.activeFilterStr) {
+                    apiFilter.push(`(${state.activeFilterStr})`);
+                }
+
+                const finalFilter = apiFilter.join(' && ');
+
+                const sortPrefix = state.sortDirection === 'desc' ? '-' : '';
+                const listOptions = { sort: `${sortPrefix}${state.sortField}`, requestKey: null };
+                if (finalFilter) listOptions.filter = finalFilter;
+
+                const resultList = await pb.collection(COLLECTION_NAME).getList(1, 50, listOptions);
+                // Alleen vastgepinde records tonen die ook aan de actieve filters voldoen
+                const pinnedRecords = await fetchPinnedRecords(finalFilter);
+                state.records = mergeRecordsWithPins(resultList.items, pinnedRecords);
+                renderTable();
+                mergeDatalistsFromRecords(resultList.items);
+
+            } catch (error) {
+                if (error?.isAbort) return;
+                console.error("Fetch error:", error);
+                if(error.status === 0) {
+                     showToast("Verbindingsfout", `Kan PocketBase niet bereiken op ${PB_URL}. Draait de server?`, "error");
+                } else if(error.status === 404) {
+                     showToast("Fout", `Collectie '${COLLECTION_NAME}' bestaat niet. Maak deze aan in PocketBase.`, "error");
+                } else {
+                     showToast("Fout", "Fout bij ophalen gegevens: " + error.message, "error");
+                }
+            } finally {
+                loadingOverlay.classList.add('hidden');
+            }
+        }
+
+        function getBijlagen(record) {
+            if (!record?.bijlage) return [];
+            return Array.isArray(record.bijlage) ? record.bijlage.filter(Boolean) : [record.bijlage];
+        }
+
+        function isImageFileName(name) {
+            return /\.(jpe?g|png|gif|webp|svg|bmp)$/i.test(name || '');
+        }
+
+        function formatFileSize(bytes) {
+            if (!bytes) return '';
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+            return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        function revokePendingPreviews() {
+            bijlageState.pending.forEach(item => {
+                if (item.previewUrl) URL.revokeObjectURL(item.previewUrl);
+            });
+        }
+
+        function resetBijlageState() {
+            revokePendingPreviews();
+            bijlageState.record = null;
+            bijlageState.existing = [];
+            bijlageState.removed = [];
+            bijlageState.pending = [];
+            inputBijlage.value = '';
+            renderBijlageList();
+        }
+
+        function setBijlageFromRecord(record) {
+            revokePendingPreviews();
+            bijlageState.record = record;
+            bijlageState.existing = getBijlagen(record);
+            bijlageState.removed = [];
+            bijlageState.pending = [];
+            inputBijlage.value = '';
+            renderBijlageList();
+        }
+
+        function refreshBijlageFromRecord(record) {
+            revokePendingPreviews();
+            bijlageState.record = record;
+            bijlageState.existing = getBijlagen(record);
+            bijlageState.removed = [];
+            bijlageState.pending = [];
+            inputBijlage.value = '';
+            renderBijlageList();
+        }
+
+        function addPendingBijlagen(fileList) {
+            const files = [...fileList].filter(file => file instanceof File && file.size > 0);
+            if (!files.length) return;
+
+            files.forEach(file => {
+                bijlageState.pending.push({
+                    id: crypto.randomUUID(),
+                    file,
+                    previewUrl: isImageFileName(file.name) ? URL.createObjectURL(file) : null
+                });
+            });
+            renderBijlageList();
+        }
+
+        function removeExistingBijlage(name) {
+            if (!bijlageState.existing.includes(name)) return;
+            bijlageState.existing = bijlageState.existing.filter(item => item !== name);
+            if (!bijlageState.removed.includes(name)) bijlageState.removed.push(name);
+            renderBijlageList();
+        }
+
+        function removePendingBijlage(id) {
+            const index = bijlageState.pending.findIndex(item => item.id === id);
+            if (index === -1) return;
+            const [removed] = bijlageState.pending.splice(index, 1);
+            if (removed.previewUrl) URL.revokeObjectURL(removed.previewUrl);
+            renderBijlageList();
+        }
+
+        function requestRemoveExistingBijlage(name) {
+            if (!confirmAction(`Weet je zeker dat je bijlage "${name}" wilt verwijderen? De bijlage wordt pas definitief verwijderd na opslaan.`)) return;
+            removeExistingBijlage(name);
+        }
+
+        function requestRemovePendingBijlage(id) {
+            const pending = bijlageState.pending.find(item => item.id === id);
+            const label = pending?.file?.name || 'deze bijlage';
+            if (!confirmAction(`Weet je zeker dat je bijlage "${label}" wilt verwijderen?`)) return;
+            removePendingBijlage(id);
+        }
+
+        function renderBijlagePreviewHtml({ name, previewUrl, record, fileName }) {
+            if (previewUrl) {
+                return `<img src="${previewUrl}" alt="${escapeAttr(name)}" loading="lazy">`;
+            }
+            if (record && fileName && isImageFileName(fileName)) {
+                const thumbUrl = pb.files.getUrl(record, fileName, { thumb: '80x80f' });
+                return `<img src="${thumbUrl}" alt="${escapeAttr(fileName)}" loading="lazy" onerror="this.replaceWith(Object.assign(document.createElement('span'),{innerHTML:'📄',className:'text-lg'}))">`;
+            }
+            return `<svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>`;
+        }
+
+        function renderBijlageList() {
+            const totalCount = bijlageState.existing.length + bijlageState.pending.length;
+            if (totalCount > 0) {
+                bijlageCountBadge.textContent = `(${totalCount})`;
+                bijlageCountBadge.classList.remove('hidden');
+            } else {
+                bijlageCountBadge.classList.add('hidden');
+            }
+
+            const items = [];
+
+            bijlageState.existing.forEach(fileName => {
+                const fileUrl = bijlageState.record ? pb.files.getUrl(bijlageState.record, fileName) : '#';
+                items.push(`
+                    <div class="bijlage-item" data-bijlage-type="existing" data-bijlage-name="${escapeAttr(fileName)}">
+                        <a href="${fileUrl}" target="_blank" onclick="event.stopPropagation()" class="bijlage-item-preview" title="Open ${escapeAttr(fileName)}">
+                            ${renderBijlagePreviewHtml({ name: fileName, record: bijlageState.record, fileName })}
+                        </a>
+                        <div class="bijlage-item-info">
+                            <span class="bijlage-item-name" title="${escapeAttr(fileName)}">${escapeAttr(fileName)}</span>
+                            <span class="bijlage-item-meta">Opgeslagen</span>
+                        </div>
+                        <button type="button" class="bijlage-item-remove" data-action="remove-existing" data-bijlage-name="${escapeAttr(fileName)}" title="Verwijderen bij opslaan">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                `);
+            });
+
+            bijlageState.pending.forEach(({ id, file, previewUrl }) => {
+                items.push(`
+                    <div class="bijlage-item is-pending" data-bijlage-type="pending" data-bijlage-id="${id}">
+                        <div class="bijlage-item-preview">
+                            ${renderBijlagePreviewHtml({ name: file.name, previewUrl })}
+                        </div>
+                        <div class="bijlage-item-info">
+                            <span class="bijlage-item-name" title="${escapeAttr(file.name)}">${escapeAttr(file.name)}</span>
+                            <span class="bijlage-item-meta">Nieuw · ${formatFileSize(file.size)}</span>
+                        </div>
+                        <button type="button" class="bijlage-item-remove" data-action="remove-pending" data-bijlage-id="${id}" title="Verwijderen">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </button>
+                    </div>
+                `);
+            });
+
+            bijlageFileList.innerHTML = items.join('');
+        }
+
+        function appendBijlagenToFormData(formData, { isUpdate = false } = {}) {
+            if (isUpdate) {
+                bijlageState.removed.forEach(name => formData.append('bijlage-', name));
+                bijlageState.pending.forEach(({ file }) => formData.append('bijlage+', file));
+                return;
+            }
+            bijlageState.pending.forEach(({ file }) => formData.append('bijlage', file));
+        }
+
+        function setupBijlageUpload() {
+            const openPicker = () => inputBijlage.click();
+
+            btnBijlagePick.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                openPicker();
+            });
+
+            bijlageDropzone.addEventListener('click', (e) => {
+                if (e.target.closest('#btn-bijlage-pick, .bijlage-item-remove, a')) return;
+                openPicker();
+            });
+
+            bijlageDropzone.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    openPicker();
+                }
+            });
+
+            inputBijlage.addEventListener('change', () => {
+                addPendingBijlagen(inputBijlage.files);
+                inputBijlage.value = '';
+            });
+
+            ['dragenter', 'dragover'].forEach(eventName => {
+                bijlageDropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    bijlageDropzone.classList.add('is-dragover');
+                });
+            });
+
+            ['dragleave', 'drop'].forEach(eventName => {
+                bijlageDropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    bijlageDropzone.classList.remove('is-dragover');
+                });
+            });
+
+            bijlageDropzone.addEventListener('drop', (e) => {
+                if (e.dataTransfer?.files?.length) addPendingBijlagen(e.dataTransfer.files);
+            });
+
+            bijlageFileList.addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-action]');
+                if (!btn) return;
+                e.stopPropagation();
+
+                if (btn.dataset.action === 'remove-existing') {
+                    requestRemoveExistingBijlage(btn.dataset.bijlageName);
+                }
+                if (btn.dataset.action === 'remove-pending') {
+                    requestRemovePendingBijlage(btn.dataset.bijlageId);
+                }
+            });
+        }
+
+        function renderBijlageThumbLink(record, fileName) {
+            const fileUrl = pb.files.getUrl(record, fileName);
+            const safeName = escapeAttr(fileName);
+
+            if (isImageFileName(fileName)) {
+                const thumbUrl = pb.files.getUrl(record, fileName, { thumb: '80x80f' });
+                return `
+                    <a href="${fileUrl}" target="_blank" onclick="event.stopPropagation()" class="bijlage-thumb-wrap" title="${safeName}">
+                        <img src="${thumbUrl}" alt="${safeName}" class="bijlage-thumb" loading="lazy" onerror="if(!this.dataset.fallback){this.dataset.fallback='1';this.src=this.closest('a').href}">
+                    </a>`;
+            }
+
+            return `
+                <a href="${fileUrl}" target="_blank" onclick="event.stopPropagation()" class="bijlage-thumb-wrap" title="${safeName}">
+                    <span class="bijlage-thumb-fallback">
+                        <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13"></path></svg>
+                    </span>
+                </a>`;
+        }
+
+        function renderBijlageCell(record) {
+            const files = getBijlagen(record);
+            if (!files.length) {
+                return '<span class="text-gray-600 pointer-events-none">-</span>';
+            }
+
+            const maxVisible = 3;
+            const visible = files.slice(0, maxVisible);
+            const overflow = files.length - maxVisible;
+            const overflowTitle = escapeAttr(files.slice(maxVisible).join(', '));
+
+            const thumbs = visible.map(fileName => renderBijlageThumbLink(record, fileName)).join('');
+            const overflowBadge = overflow > 0
+                ? `<span class="bijlage-overflow" title="${overflowTitle}">+${overflow}</span>`
+                : '';
+
+            return `<div class="bijlage-cell-stack"><div class="bijlage-thumb-stack">${thumbs}</div>${overflowBadge}</div>`;
+        }
+
+        function renderTable() {
+            tableBody.innerHTML = '';
+            
+            if (state.records.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            }
+            
+            emptyState.classList.add('hidden');
+
+            state.records.forEach(record => {
+                const tr = document.createElement('tr');
+                const isEditing = state.editingId === record.id;
+                const isPinned = state.pinnedRecordIds.includes(record.id);
+                tr.className = `transition-colors group ${isPinned ? 'is-pinned ' : ''}${isEditing ? 'bg-blue-900/20' : 'hover:bg-gray-800/50'}`;
+                
+                // Maak hele rij klikbaar (trigger bewerken)
+                tr.onclick = () => loadRecordForEdit(record);
+
+                // Status Badge color
+                let statusBadge = `<span class="px-2 py-1 rounded text-xs font-medium bg-gray-700 text-gray-300 pointer-events-none">${record.status || '-'}</span>`;
+                if(record.status === 'Nieuw') statusBadge = `<span class="px-2 py-1 rounded text-xs font-medium bg-blue-900/50 text-blue-400 border border-blue-800 pointer-events-none">${record.status}</span>`;
+                if(record.status === 'In uitvoering') statusBadge = `<span class="px-2 py-1 rounded text-xs font-medium bg-yellow-900/50 text-yellow-400 border border-yellow-800 pointer-events-none">${record.status}</span>`;
+                if(record.status === 'Wachtend') statusBadge = `<span class="px-2 py-1 rounded text-xs font-medium bg-orange-900/50 text-orange-400 border border-orange-800 pointer-events-none">${record.status}</span>`;
+                if(record.status === 'Afgerond') statusBadge = `<span class="px-2 py-1 rounded text-xs font-medium bg-green-900/50 text-green-400 border border-green-800 pointer-events-none">${record.status}</span>`;
+                if(record.status === 'Ter info') statusBadge = `<span class="px-2 py-1 rounded text-xs font-medium bg-purple-900/50 text-purple-400 border border-purple-800 pointer-events-none">${record.status}</span>`;
+                if(record.status === 'Archief') statusBadge = `<span class="px-2 py-1 rounded text-xs font-medium bg-gray-800/80 text-gray-400 border border-gray-600 pointer-events-none">${record.status}</span>`;
+
+                // Bijlage thumbnail
+                const bijlageLink = renderBijlageCell(record);
+
+                // Veilige output HTML
+                const safeHTML = (str) => {
+                    if(!str) return '<span class="text-gray-500 italic pointer-events-none">-</span>';
+                    const div = document.createElement('div');
+                    div.innerText = str;
+                    return `<span class="pointer-events-none">${div.innerHTML}</span>`;
+                };
+
+                tr.innerHTML = `
+                    <td data-col="dataset" class="border-b border-gray-800 truncate" title="${record.dataset || ''}">${renderDatasetHTML(record.dataset)}</td>
+                    <td data-col="titel" class="border-b border-gray-800 truncate text-gray-200 font-semibold" title="${record.titel || ''}">${safeHTML(record.titel)}</td>
+                    <td data-col="soort" class="border-b border-gray-800 truncate text-gray-400" title="${record.soort || ''}">${safeHTML(record.soort)}</td>
+                    <td data-col="omschrijving" class="border-b border-gray-800 truncate text-gray-300 font-medium" title="${record.omschrijving || ''}">${safeHTML(record.omschrijving)}</td>
+                    <td data-col="kenmerk" class="border-b border-gray-800 truncate text-gray-400" title="${record.kenmerk || ''}">${safeHTML(record.kenmerk)}</td>
+                    <td data-col="betrokkene" class="border-b border-gray-800 truncate text-gray-400" title="${record.betrokkene || ''}">${safeHTML(record.betrokkene)}</td>
+                    <td data-col="status" class="border-b border-gray-800">${statusBadge}</td>
+                    <td data-col="bijlage" class="border-b border-gray-800 text-center">${bijlageLink}</td>
+                    <td data-col="created" class="border-b border-gray-800 text-gray-500 text-xs whitespace-nowrap pointer-events-none" title="${record.created || ''}">${formatDateTime(record.created)}</td>
+                    <td data-col="updated" class="border-b border-gray-800 text-gray-500 text-xs whitespace-nowrap pointer-events-none" title="${record.updated || ''}">${formatDateTime(record.updated)}</td>
+                    <td class="border-b border-gray-800 text-right whitespace-nowrap">
+                        <button onclick="togglePinRecord('${record.id}', event)" class="btn-row-action btn-row-pin ${isPinned ? 'is-pinned' : 'opacity-0 group-hover:opacity-100'} transition-opacity" title="${isPinned ? 'Losmaken' : 'Vastpinnen'}">
+                            <svg class="w-4 h-4 pointer-events-none" fill="${isPinned ? 'currentColor' : 'none'}" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z"></path></svg>
+                        </button>
+                        <button onclick="deleteRecord('${record.id}', event)" class="btn-row-action text-red-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity" title="Verwijder">
+                            <svg class="w-4 h-4 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(tr);
+            });
+
+            applyColumnVisibility();
+            applyColumnWidths();
+            updateSortButtons();
+        }
+
+        function setupTableSort() {
+            const sortIconAsc = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"></path></svg>';
+            const sortIconDesc = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>';
+            const sortIconNeutral = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16V4m0 0L3 8m4-4l4 4m6 0v12m0 0l4-4m-4 4l-4-4"></path></svg>';
+
+            document.querySelectorAll('#data-table thead th[data-col]').forEach(th => {
+                const colId = th.dataset.col;
+                const col = state.columns.find(c => c.id === colId);
+                const label = col?.label || th.textContent.trim();
+
+                th.innerHTML = `
+                    <div class="th-sort-wrap">
+                        <span class="truncate flex-1">${label}</span>
+                        <button type="button" class="col-sort-btn" data-sort-field="${colId}" title="Sorteren op ${label}">
+                            <span class="sort-icon-neutral">${sortIconNeutral}</span>
+                            <span class="sort-icon-asc hidden">${sortIconAsc}</span>
+                            <span class="sort-icon-desc hidden">${sortIconDesc}</span>
+                        </button>
+                    </div>
+                `;
+            });
+
+            document.querySelectorAll('.col-sort-btn').forEach(btn => {
+                btn.addEventListener('click', (e) => {
+                    e.stopPropagation();
+                    const field = btn.dataset.sortField;
+                    if (state.sortField === field) {
+                        state.sortDirection = state.sortDirection === 'asc' ? 'desc' : 'asc';
+                    } else {
+                        state.sortField = field;
+                        state.sortDirection = 'asc';
+                    }
+                    localStorage.setItem('pbApp_sort', JSON.stringify({
+                        field: state.sortField,
+                        direction: state.sortDirection
+                    }));
+                    updateSortButtons();
+                    fetchData();
+                });
+            });
+
+            updateSortButtons();
+        }
+
+        function updateSortButtons() {
+            document.querySelectorAll('.col-sort-btn').forEach(btn => {
+                const field = btn.dataset.sortField;
+                const isActive = state.sortField === field;
+                btn.classList.toggle('active', isActive);
+
+                btn.querySelector('.sort-icon-neutral')?.classList.toggle('hidden', isActive);
+                btn.querySelector('.sort-icon-asc')?.classList.toggle('hidden', !isActive || state.sortDirection !== 'asc');
+                btn.querySelector('.sort-icon-desc')?.classList.toggle('hidden', !isActive || state.sortDirection !== 'desc');
+            });
+        }
+
+        // --- Data Opslaan & Wijzigen ---
+        function setFormButtonsDisabled(disabled) {
+            btnSubmit.disabled = disabled;
+            btnSaveStay.disabled = disabled;
+            btnSaveClose.disabled = disabled;
+            btnCancelEdit.disabled = disabled;
+        }
+
+        async function submitForm({ closeAfterSave = false } = {}) {
+            syncOmschrijvingToHidden();
+
+            if (!dataForm.checkValidity()) {
+                dataForm.reportValidity();
+                return;
+            }
+
+            const formData = new FormData(dataForm);
+            const editingId = state.editingId;
+            appendBijlagenToFormData(formData, { isUpdate: Boolean(editingId) });
+
+            try {
+                setFormButtonsDisabled(true);
+                if (editingId) {
+                    btnSaveStayText.innerText = 'Bezig...';
+                    btnSaveCloseText.innerText = 'Bezig...';
+                }
+
+                if (editingId) {
+                    await pb.collection(COLLECTION_NAME).update(editingId, formData);
+                    showToast('Succes', closeAfterSave ? 'Record is gewijzigd' : 'Wijzigingen opgeslagen', 'success');
+
+                    await fetchData();
+                    await fetchSuggestions();
+
+                    if (closeAfterSave) {
+                        cancelEditMode();
+                    } else {
+                        const updated = state.records.find(r => r.id === editingId);
+                        if (updated) refreshBijlageFromRecord(updated);
+                        renderTable();
+                    }
+                } else {
+                    await pb.collection(COLLECTION_NAME).create(formData);
+                    dataForm.reset();
+                    showToast('Succes', 'Nieuw record opgeslagen', 'success');
+                    await fetchData();
+                    await fetchSuggestions();
+                }
+            } catch (error) {
+                console.error('Upload error:', error);
+                showToast('Fout', 'Actie mislukt: ' + (error.data?.message || error.message), 'error');
+            } finally {
+                setFormButtonsDisabled(false);
+                btnSaveStayText.innerText = 'Opslaan';
+                btnSaveCloseText.innerText = 'Wijzigen en sluiten';
+            }
+        }
+
+        btnSubmit.addEventListener('click', () => submitForm());
+        btnSaveStay.addEventListener('click', () => submitForm({ closeAfterSave: false }));
+        btnSaveClose.addEventListener('click', () => submitForm({ closeAfterSave: true }));
+        btnCancelEdit.addEventListener('click', cancelEditMode);
+
+        // --- Bewerkingsmodus Logica ---
+        function loadRecordForEdit(record) {
+            state.editingId = record.id;
+            
+            // Vul formulier velden
+            document.getElementById('input-titel').value = record.titel || '';
+            setOmschrijvingEditorContent(record.omschrijving || '');
+            setOmschrijvingMode('markup');
+            document.getElementById('input-soort').value = record.soort || '';
+            document.getElementById('input-kenmerk').value = record.kenmerk || '';
+            document.getElementById('input-dataset').value = record.dataset || '';
+            document.getElementById('input-betrokkene').value = record.betrokkene || '';
+            document.getElementById('input-status').value = record.status || 'Nieuw';
+            syncColoredFormFields();
+            
+            setBijlageFromRecord(record);
+            fileHelpText.classList.remove('hidden');
+
+            // Pas UI aan naar bewerk modus
+            formTitle.innerHTML = `
+                <svg class="w-6 h-6 text-yellow-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
+                Record Wijzigen
+            `;
+            formSubtitle.innerText = "Bewerk de geselecteerde data";
+            formHeaderBg.classList.add('bg-blue-900/30');
+
+            btnRowNew.classList.add('hidden');
+            btnRowEdit.classList.remove('hidden');
+
+            renderTable(); // Update selectie styling in tabel
+        }
+
+        function cancelEditMode() {
+            state.editingId = null;
+            dataForm.reset();
+            fileHelpText.classList.add('hidden');
+
+            // Pas UI aan naar nieuw modus
+            formTitle.innerHTML = `
+                <svg class="w-6 h-6 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                Nieuwe Invoer
+            `;
+            formSubtitle.innerText = "Sla gegevens direct op in PocketBase";
+            formHeaderBg.classList.remove('bg-blue-900/30');
+
+            btnRowEdit.classList.add('hidden');
+            btnRowNew.classList.remove('hidden');
+
+            renderTable(); // Verwijder selectie styling uit tabel
+            syncColoredFormFields();
+        }
+
+        window.togglePinRecord = (id, event) => {
+            event.stopPropagation();
+            if (state.pinnedRecordIds.includes(id)) {
+                state.pinnedRecordIds = state.pinnedRecordIds.filter(recordId => recordId !== id);
+                showToast("Losgemaakt", "Record staat niet meer bovenaan.", "success");
+            } else {
+                state.pinnedRecordIds.push(id);
+                showToast("Vastgepind", "Record blijft bovenaan staan.", "success");
+            }
+            savePinnedRecordIds();
+            fetchData();
+        };
+
+        // --- Record Verwijderen ---
+        window.deleteRecord = async (id, event) => {
+            event.stopPropagation();
+            const record = state.records.find(item => item.id === id);
+            const label = record?.titel?.trim() || 'dit record';
+            if (!confirmAction(`Weet je zeker dat je "${label}" wilt verwijderen? Deze actie kan niet ongedaan worden gemaakt.`)) return;
+
+            try {
+                await pb.collection(COLLECTION_NAME).delete(id);
+                state.pinnedRecordIds = state.pinnedRecordIds.filter(recordId => recordId !== id);
+                savePinnedRecordIds();
+                showToast("Verwijderd", "Record is verwijderd.", "success");
+                if (state.editingId === id) cancelEditMode();
+                await fetchData();
+                await fetchSuggestions();
+            } catch(e) {
+                showToast("Fout", "Fout bij verwijderen: " + e.message, "error");
+            }
+        };
+
+        // --- Event Listeners & Overige UI Logica ---
+        function setupEventListeners() {
+            // Zoekbalk debouncing
+            let timeout = null;
+            searchInput.addEventListener('input', (e) => {
+                clearTimeout(timeout);
+                timeout = setTimeout(() => {
+                    state.searchQuery = e.target.value;
+                    fetchData();
+                }, 400);
+            });
+
+            // Toggles voor panels
+            filterToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                filterPanel.classList.toggle('hidden');
+                colsPanel.classList.add('hidden');
+            });
+
+            colsToggle.addEventListener('click', (e) => {
+                e.stopPropagation();
+                colsPanel.classList.toggle('hidden');
+                filterPanel.classList.add('hidden');
+            });
+
+            // Klikken buiten panels sluit ze
+            document.addEventListener('click', (e) => {
+                if(!filterPanel.contains(e.target) && !filterToggle.contains(e.target)) filterPanel.classList.add('hidden');
+                if(!colsPanel.contains(e.target) && !colsToggle.contains(e.target)) colsPanel.classList.add('hidden');
+            });
+
+            document.getElementById('input-dataset').addEventListener('input', syncDatasetInputColor);
+            document.getElementById('input-dataset').addEventListener('change', syncDatasetInputColor);
+            document.getElementById('input-status').addEventListener('change', syncStatusInputColor);
+
+            // Filter toepassen knop
+            document.getElementById('btn-apply-filter').addEventListener('click', () => {
+                applyCustomFilter();
+            });
+
+            // Filter opslaan knop
+            document.getElementById('btn-save-filter').addEventListener('click', () => {
+                const field = document.getElementById('filter-field').value;
+                const op = document.getElementById('filter-operator').value;
+                const val = document.getElementById('filter-value').value;
+                
+                if(!val) { alert("Vul een waarde in"); return; }
+                
+                const name = prompt("Geef een naam voor dit filter:", `${field} ${op} ${val}`);
+                if (name) {
+                    const filterStr = `${field} ${op} "${val.replace(/"/g, '\\"')}"`;
+                    state.savedFilters.push({
+                        id: `sf-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+                        name,
+                        filter: filterStr
+                    });
+                    saveFiltersToLocal();
+                    renderSavedFilters();
+                }
+            });
+
+            // Filter wissen
+            document.getElementById('btn-clear-filter').addEventListener('click', () => {
+                state.activeFilterStr = '';
+                state.activeSavedFilterIds = [];
+                saveActiveSavedFilterIds();
+                updateFilterBadge();
+                document.getElementById('filter-value').value = '';
+                renderSavedFilters();
+                filterPanel.classList.add('hidden');
+                fetchData();
+            });
+        }
+
+        // --- Kolom Zichtbaarheid Logica ---
+        function renderColumnCheckboxes() {
+            colCheckboxesContainer.innerHTML = '';
+            state.columns.forEach(col => {
+                const label = document.createElement('label');
+                label.className = "flex items-center gap-2 text-sm text-gray-300 hover:text-white cursor-pointer";
+                label.innerHTML = `
+                    <input type="checkbox" ${col.visible ? 'checked' : ''} class="rounded border-gray-600 text-blue-500 focus:ring-blue-500 bg-gray-900" onchange="toggleColumn('${col.id}', this.checked)">
+                    ${col.label}
+                `;
+                colCheckboxesContainer.appendChild(label);
+            });
+        }
+
+        window.toggleColumn = (colId, isVisible) => {
+            const col = state.columns.find(c => c.id === colId);
+            if(col) {
+                col.visible = isVisible;
+                // Save to local storage
+                const pref = {};
+                state.columns.forEach(c => pref[c.id] = c.visible);
+                localStorage.setItem('pbApp_columns', JSON.stringify(pref));
+                applyColumnVisibility();
+            }
+        };
+
+        function applyColumnVisibility() {
+            state.columns.forEach(col => {
+                const elements = document.querySelectorAll(`[data-col="${col.id}"]`);
+                elements.forEach(el => {
+                    if (col.visible) el.classList.remove('hidden-col');
+                    else el.classList.add('hidden-col');
+                });
+            });
+        }
+
+        // --- Filter Logica ---
+        function applyCustomFilter() {
+            const field = document.getElementById('filter-field').value;
+            const op = document.getElementById('filter-operator').value;
+            const val = document.getElementById('filter-value').value;
+            
+            if(val) {
+                state.activeFilterStr = `${field} ${op} "${val.replace(/"/g, '\\"')}"`;
+                updateFilterBadge();
+                fetchData();
+                filterPanel.classList.add('hidden');
+            }
+        }
+
+        window.toggleSavedFilter = (filterId, isActive) => {
+            if (isActive) {
+                if (!state.activeSavedFilterIds.includes(filterId)) {
+                    state.activeSavedFilterIds.push(filterId);
+                }
+            } else {
+                state.activeSavedFilterIds = state.activeSavedFilterIds.filter(id => id !== filterId);
+            }
+            saveActiveSavedFilterIds();
+            updateFilterBadge();
+            fetchData();
+        };
+
+        window.deleteSavedFilter = (filterId, e) => {
+            e.stopPropagation();
+            const filter = state.savedFilters.find(item => item.id === filterId);
+            const label = filter?.name || 'dit filter';
+            if (!confirmAction(`Weet je zeker dat je filter "${label}" wilt verwijderen?`)) return;
+
+            state.savedFilters = state.savedFilters.filter(f => f.id !== filterId);
+            state.activeSavedFilterIds = state.activeSavedFilterIds.filter(id => id !== filterId);
+            saveFiltersToLocal();
+            saveActiveSavedFilterIds();
+            updateFilterBadge();
+            renderSavedFilters();
+            fetchData();
+        };
+
+        function renderSavedFilters() {
+            const list = document.getElementById('saved-filters-list');
+            list.innerHTML = '';
+            
+            if(state.savedFilters.length === 0) {
+                list.innerHTML = '<li class="text-xs text-gray-500 italic py-1">Geen opgeslagen filters</li>';
+                return;
+            }
+
+            state.savedFilters.forEach((f) => {
+                const isActive = state.activeSavedFilterIds.includes(f.id);
+                const li = document.createElement('li');
+                li.className = "flex items-center gap-2 text-sm py-1.5 px-2 hover:bg-gray-700/50 rounded group text-gray-300";
+                li.innerHTML = `
+                    <input type="checkbox" ${isActive ? 'checked' : ''} class="rounded border-gray-600 text-blue-500 focus:ring-blue-500 bg-gray-900 shrink-0" onchange="toggleSavedFilter('${f.id}', this.checked)">
+                    <span class="truncate flex-1 min-w-0">${escapeAttr(f.name)}</span>
+                    <button onclick="deleteSavedFilter('${f.id}', event)" class="text-red-500/50 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity p-1 shrink-0" title="Filter verwijderen">
+                        <svg class="w-3.5 h-3.5 pointer-events-none" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                `;
+                list.appendChild(li);
+            });
+        }
+
+        function saveFiltersToLocal() {
+            localStorage.setItem('pbApp_savedFilters', JSON.stringify(state.savedFilters));
+        }
+
+        function saveActiveSavedFilterIds() {
+            localStorage.setItem('pbApp_activeSavedFilterIds', JSON.stringify(state.activeSavedFilterIds));
+        }
+
+        function updateFilterBadge() {
+            const count = state.activeSavedFilterIds.length + (state.activeFilterStr ? 1 : 0);
+            if (count > 0) {
+                filterBadge.textContent = String(count);
+                filterBadge.classList.remove('hidden');
+            } else {
+                filterBadge.classList.add('hidden');
+            }
+        }
+
+        // --- Keuzelijsten & Klembord ---
+        async function fetchSuggestions() {
+            if (!pb) return;
+
+            try {
+                const result = await pb.collection(COLLECTION_NAME).getList(1, 500, {
+                    sort: '-created',
+                    requestKey: null
+                });
+                updateDatalists(result.items);
+            } catch (error) {
+                console.warn('Kon suggesties niet ophalen:', error);
+            }
+        }
+
+        function mergeDatalistsFromRecords(records) {
+            SUGGESTION_FIELDS.forEach(field => {
+                const datalist = document.getElementById(`datalist-${field}`);
+                if (!datalist) return;
+
+                const existing = new Set(
+                    Array.from(datalist.options).map(opt => opt.value)
+                );
+                records
+                    .map(r => (r[field] || '').trim())
+                    .filter(Boolean)
+                    .forEach(value => existing.add(value));
+
+                const sorted = [...existing].sort((a, b) => a.localeCompare(b, 'nl'));
+                datalist.innerHTML = sorted
+                    .map(value => `<option value="${escapeAttr(value)}">`)
+                    .join('');
+            });
+        }
+
+        function updateDatalists(records) {
+            SUGGESTION_FIELDS.forEach(field => {
+                const datalist = document.getElementById(`datalist-${field}`);
+                if (!datalist) return;
+
+                const unique = [...new Set(
+                    records
+                        .map(r => (r[field] || '').trim())
+                        .filter(Boolean)
+                )].sort((a, b) => a.localeCompare(b, 'nl'));
+
+                datalist.innerHTML = unique
+                    .map(value => `<option value="${escapeAttr(value)}">`)
+                    .join('');
+            });
+        }
+
+        function escapeAttr(str) {
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/"/g, '&quot;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;');
+        }
+
+        window.copyFieldValue = async (inputId) => {
+            if (inputId === 'input-omschrijving') syncOmschrijvingToHidden();
+
+            const el = document.getElementById(inputId);
+            if (!el) return;
+
+            const text = (el.value || '').trim();
+            if (!text) {
+                showToast('Leeg veld', 'Er is geen inhoud om te kopiëren.', 'error');
+                return;
+            }
+
+            try {
+                await navigator.clipboard.writeText(text);
+                showToast('Gekopieerd', 'Inhoud gekopieerd naar klembord.', 'success');
+            } catch (error) {
+                try {
+                    el.focus();
+                    if (el.select) el.select();
+                    document.execCommand('copy');
+                    showToast('Gekopieerd', 'Inhoud gekopieerd naar klembord.', 'success');
+                } catch (fallbackError) {
+                    showToast('Fout', 'Kopiëren naar klembord mislukt.', 'error');
+                }
+            }
+        };
+
+        // --- Omschrijving editor (CodeMirror markup + visuele weergave) ---
+        const omschrijvingCmHost = document.getElementById('omschrijving-cm-host');
+        const omschrijvingVisual = document.getElementById('omschrijving-visual');
+        const omschrijvingHidden = document.getElementById('input-omschrijving');
+        const btnOmschrijvingMode = document.getElementById('btn-omschrijving-mode');
+        let omschrijvingMode = 'markup';
+        let omsCmView = null;
+
+        function escapeOmsHtml(str) {
+            return String(str ?? '')
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;');
+        }
+
+        function parseMarkupLine(line) {
+            let match = line.match(/^\[ \]\s?(.*)$/);
+            if (match) return { type: 'check', checked: false, text: match[1] };
+            match = line.match(/^\[x\]\s?(.*)$/i);
+            if (match) return { type: 'check', checked: true, text: match[1] };
+            match = line.match(/^•\s?(.*)$/);
+            if (match) return { type: 'bullet', text: match[1] };
+            if (line === '') return { type: 'empty', text: '' };
+            return { type: 'text', text: line };
+        }
+
+        function getOmschrijvingMarkup() {
+            if (omsCmView) return omsCmView.getValue();
+            return omschrijvingHidden.value || '';
+        }
+
+        function syncOmschrijvingToHidden() {
+            omschrijvingHidden.value = getOmschrijvingMarkup();
+        }
+
+        function setOmschrijvingEditorContent(text) {
+            const value = text || '';
+            if (omsCmView) omsCmView.setValue(value);
+            omschrijvingHidden.value = value;
+            if (omschrijvingMode === 'visual') renderOmschrijvingVisual();
+        }
+
+        function insertTextInOmschrijving(text) {
+            if (omschrijvingMode === 'visual') {
+                setOmschrijvingMode('markup');
+            }
+            if (!omsCmView) {
+                omschrijvingHidden.value = (omschrijvingHidden.value || '') + text;
+                return;
+            }
+            omsCmView.replaceSelection(text, 'end');
+            omsCmView.focus();
+            syncOmschrijvingToHidden();
+        }
+
+        function insertOmschrijvingBullet() {
+            insertTextInOmschrijving('• ');
+        }
+
+        function insertOmschrijvingCheckbox() {
+            insertTextInOmschrijving('[ ] ');
+        }
+
+        function renderOmschrijvingVisual() {
+            const markup = getOmschrijvingMarkup();
+            const lines = markup.split('\n');
+            const isEmpty = markup === '' || (lines.length === 1 && markup.trim() === '');
+
+            if (isEmpty) {
+                omschrijvingVisual.innerHTML = '<p class="oms-visual-empty">Geen omschrijving. Wissel naar markup (&lt;&gt;) om te bewerken.</p>';
+                return;
+            }
+
+            omschrijvingVisual.innerHTML = lines.map((line, index) => {
+                const parsed = parseMarkupLine(line);
+                const text = escapeOmsHtml(parsed.text);
+
+                if (parsed.type === 'check') {
+                    const checkedClass = parsed.checked ? ' checked' : '';
+                    const icon = parsed.checked ? '✓' : '☐';
+                    return `<div class="oms-visual-line" data-line-index="${index}">` +
+                        `<button type="button" class="oms-visual-check${checkedClass}" data-line-index="${index}" title="Afvinken">${icon}</button>` +
+                        `<span class="oms-visual-text">${text}</span></div>`;
+                }
+                if (parsed.type === 'bullet') {
+                    return `<div class="oms-visual-line"><span class="oms-visual-prefix">•</span><span class="oms-visual-text">${text}</span></div>`;
+                }
+                return `<div class="oms-visual-line"><span class="oms-visual-text">${text || '&nbsp;'}</span></div>`;
+            }).join('');
+        }
+
+        function toggleVisualCheckbox(lineIndex) {
+            const lines = getOmschrijvingMarkup().split('\n');
+            if (lineIndex < 0 || lineIndex >= lines.length) return;
+            const line = lines[lineIndex];
+            if (/^\[ \]/.test(line)) {
+                lines[lineIndex] = line.replace(/^\[ \]/, '[x]');
+            } else if (/^\[x\]/i.test(line)) {
+                lines[lineIndex] = line.replace(/^\[x\]/i, '[ ]');
+            } else {
+                return;
+            }
+            setOmschrijvingEditorContent(lines.join('\n'));
+        }
+
+        function updateOmschrijvingModeUi() {
+            const isVisual = omschrijvingMode === 'visual';
+            omschrijvingCmHost.classList.toggle('hidden', isVisual);
+            omschrijvingVisual.classList.toggle('hidden', !isVisual);
+            btnOmschrijvingMode.classList.toggle('active', isVisual);
+            btnOmschrijvingMode.title = isVisual ? 'Markup-weergave' : 'Visuele weergave';
+            btnOmschrijvingMode.setAttribute('aria-pressed', isVisual ? 'true' : 'false');
+        }
+
+        function setOmschrijvingMode(mode) {
+            syncOmschrijvingToHidden();
+            omschrijvingMode = mode === 'visual' ? 'visual' : 'markup';
+            updateOmschrijvingModeUi();
+            if (omschrijvingMode === 'visual') {
+                renderOmschrijvingVisual();
+            } else if (omsCmView) {
+                omsCmView.refresh();
+                omsCmView.focus();
+            }
+        }
+
+        function toggleOmschrijvingMode() {
+            setOmschrijvingMode(omschrijvingMode === 'markup' ? 'visual' : 'markup');
+        }
+
+        async function setupOmschrijvingEditor() {
+            document.getElementById('btn-omschrijving-bullet').addEventListener('click', insertOmschrijvingBullet);
+            document.getElementById('btn-omschrijving-check').addEventListener('click', insertOmschrijvingCheckbox);
+            btnOmschrijvingMode.addEventListener('click', toggleOmschrijvingMode);
+
+            omschrijvingVisual.addEventListener('click', (e) => {
+                const check = e.target.closest('.oms-visual-check');
+                if (!check) return;
+                const index = Number(check.dataset.lineIndex);
+                if (Number.isInteger(index)) toggleVisualCheckbox(index);
+            });
+
+            if (typeof CodeMirror === 'undefined') {
+                console.error('CodeMirror niet geladen');
+                showToast('Fout', 'CodeMirror kon niet geladen worden.', 'error');
+                const fallback = document.createElement('textarea');
+                fallback.className = 'w-full min-h-[27rem] bg-transparent border-0 px-3 py-2 text-white font-mono text-sm focus:outline-none resize-y';
+                fallback.placeholder = 'Markup: gewone tekst, • bullets, [ ] en [x] afvinkvakjes';
+                fallback.addEventListener('input', () => {
+                    omschrijvingHidden.value = fallback.value;
+                });
+                omschrijvingCmHost.appendChild(fallback);
+                omsCmView = {
+                    getValue: () => fallback.value,
+                    setValue: (v) => { fallback.value = v || ''; },
+                    replaceSelection: (text) => {
+                        const start = fallback.selectionStart || 0;
+                        const end = fallback.selectionEnd || 0;
+                        fallback.value = fallback.value.slice(0, start) + text + fallback.value.slice(end);
+                        const cursor = start + text.length;
+                        fallback.setSelectionRange(cursor, cursor);
+                    },
+                    focus: () => fallback.focus(),
+                    refresh: () => {}
+                };
+            } else {
+                omsCmView = CodeMirror(omschrijvingCmHost, {
+                    value: '',
+                    lineNumbers: true,
+                    lineWrapping: true,
+                    indentUnit: 2,
+                    tabSize: 2
+                });
+                omsCmView.on('change', syncOmschrijvingToHidden);
+            }
+
+            setOmschrijvingMode('markup');
+            setOmschrijvingEditorContent('');
+
+            dataForm.addEventListener('reset', () => {
+                setOmschrijvingEditorContent('');
+                setOmschrijvingMode('markup');
+                resetBijlageState();
+                requestAnimationFrame(syncColoredFormFields);
+            });
+        }
+
+        // --- Kolombreedte tabel ---
+        function applyColumnWidths() {
+            document.querySelectorAll('#data-table [data-col]').forEach(el => {
+                el.style.width = '';
+                el.style.minWidth = '';
+                el.style.maxWidth = '';
+            });
+            Object.entries(state.columnWidths).forEach(([colId, width]) => {
+                if (!width) return;
+                document.querySelectorAll(`#data-table [data-col="${colId}"]`).forEach(el => {
+                    el.style.width = width + 'px';
+                });
+            });
+        }
+
+        function setupColumnResize() {
+            const table = document.getElementById('data-table');
+            if (!table) return;
+
+            table.querySelectorAll('thead th[data-col]').forEach(th => {
+                const colId = th.dataset.col;
+                if (th.querySelector('.col-resizer')) return;
+
+                const resizer = document.createElement('div');
+                resizer.className = 'col-resizer';
+                resizer.title = 'Sleep om kolombreedte aan te passen';
+
+                resizer.addEventListener('mousedown', (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    const startX = e.clientX;
+                    const startWidth = th.offsetWidth;
+                    resizer.classList.add('dragging');
+                    document.body.classList.add('is-resizing');
+
+                    const onMove = (moveEvent) => {
+                        const newWidth = Math.max(60, startWidth + moveEvent.clientX - startX);
+                        state.columnWidths[colId] = newWidth;
+                        applyColumnWidths();
+                    };
+
+                    const onUp = () => {
+                        resizer.classList.remove('dragging');
+                        document.body.classList.remove('is-resizing');
+                        localStorage.setItem('pbApp_columnWidths_v2', JSON.stringify(state.columnWidths));
+                        document.removeEventListener('mousemove', onMove);
+                        document.removeEventListener('mouseup', onUp);
+                    };
+
+                    document.addEventListener('mousemove', onMove);
+                    document.addEventListener('mouseup', onUp);
+                });
+
+                th.appendChild(resizer);
+            });
+
+            applyColumnWidths();
+        }
+
+        // --- Sidebar resize ---
+        function setupSidebarResize() {
+            const sidebar = document.getElementById('sidebar');
+            const resizer = document.getElementById('sidebar-resizer');
+            const savedWidth = parseInt(localStorage.getItem('pbApp_sidebarWidth'), 10);
+
+            if (savedWidth >= 280 && savedWidth <= 700) {
+                sidebar.style.width = savedWidth + 'px';
+            }
+
+            resizer.addEventListener('mousedown', (e) => {
+                e.preventDefault();
+                const startX = e.clientX;
+                const startWidth = sidebar.offsetWidth;
+                resizer.classList.add('dragging');
+                document.body.classList.add('is-resizing');
+
+                const onMove = (moveEvent) => {
+                    const newWidth = Math.min(700, Math.max(280, startWidth + moveEvent.clientX - startX));
+                    sidebar.style.width = newWidth + 'px';
+                };
+
+                const onUp = () => {
+                    resizer.classList.remove('dragging');
+                    document.body.classList.remove('is-resizing');
+                    localStorage.setItem('pbApp_sidebarWidth', sidebar.offsetWidth);
+                    document.removeEventListener('mousemove', onMove);
+                    document.removeEventListener('mouseup', onUp);
+                };
+
+                document.addEventListener('mousemove', onMove);
+                document.addEventListener('mouseup', onUp);
+            });
+        }
+
+        // --- Utilities ---
+        function formatDateTime(isoStr) {
+            if (!isoStr) return '<span class="text-gray-500 italic">-</span>';
+            try {
+                const formatted = new Date(isoStr).toLocaleString('nl-NL', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+                return `<span>${formatted}</span>`;
+            } catch {
+                return `<span>${isoStr}</span>`;
+            }
+        }
+
+        function showToast(title, message, type = "success") {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            
+            const colorClass = type === 'success' ? 'bg-green-900 border-green-700' : 'bg-red-900 border-red-700';
+            const icon = type === 'success' 
+                ? '<svg class="w-5 h-5 text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>'
+                : '<svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
+
+            toast.className = `flex items-start gap-3 p-4 rounded-lg shadow-xl border ${colorClass} text-white max-w-sm transform transition-all translate-x-full duration-300 opacity-0`;
+            toast.innerHTML = `
+                <div class="mt-0.5">${icon}</div>
+                <div>
+                    <h4 class="font-medium text-sm">${title}</h4>
+                    <p class="text-xs text-gray-300 mt-1">${message}</p>
+                </div>
+            `;
+            
+            container.appendChild(toast);
+            
+            // Animate in
+            requestAnimationFrame(() => {
+                toast.classList.remove('translate-x-full', 'opacity-0');
+            });
+            
+            // Remove na 4 seconden
+            setTimeout(() => {
+                toast.classList.add('translate-x-full', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        // Start app
+        document.addEventListener('DOMContentLoaded', init);
+
+    </script>
+</body>
+</html>
