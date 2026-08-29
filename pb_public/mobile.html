@@ -1,0 +1,845 @@
+<!DOCTYPE html>
+<html lang="nl" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#0b0f19">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <title>Notelight · Mobiel</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        gray: { 850: '#1a202c', 900: '#111827', 950: '#0b0f19' }
+                    }
+                }
+            }
+        }
+    </script>
+    <script src="https://unpkg.com/pocketbase@0.28.0/dist/pocketbase.umd.js"></script>
+    <style>
+        :root {
+            --safe-top: env(safe-area-inset-top, 0px);
+            --safe-bottom: env(safe-area-inset-bottom, 0px);
+        }
+        html, body {
+            height: 100%;
+            background: #0b0f19;
+        }
+        body {
+            min-height: 100dvh;
+            overflow: hidden;
+            font-size: 16px;
+            -webkit-tap-highlight-color: transparent;
+            touch-action: manipulation;
+        }
+        input, select, textarea, button { font-size: 16px; }
+        .app-shell {
+            height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            padding-top: var(--safe-top);
+        }
+        .list-scroll {
+            flex: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding-bottom: calc(5.5rem + var(--safe-bottom));
+        }
+        .bottom-nav {
+            position: fixed;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            z-index: 30;
+            display: flex;
+            gap: 0.25rem;
+            padding: 0.4rem 0.75rem calc(0.4rem + var(--safe-bottom));
+            background: rgba(17, 24, 39, 0.94);
+            border-top: 1px solid #1f2937;
+            backdrop-filter: blur(10px);
+        }
+        .nav-btn {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.15rem;
+            min-height: 2.75rem;
+            color: #9ca3af;
+            font-size: 0.7rem;
+            font-weight: 600;
+            border-radius: 0.7rem;
+        }
+        .nav-btn svg { width: 1.35rem; height: 1.35rem; }
+        .nav-btn.is-active { color: #60a5fa; background: rgba(37, 99, 235, 0.12); }
+        .chip-row {
+            display: flex;
+            gap: 0.45rem;
+            overflow-x: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 0 1rem 0.75rem;
+            scrollbar-width: none;
+        }
+        .chip-row::-webkit-scrollbar { display: none; }
+        .chip {
+            flex-shrink: 0;
+            border: 1px solid #374151;
+            background: #1f2937;
+            color: #d1d5db;
+            border-radius: 999px;
+            padding: 0.4rem 0.85rem;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+        .chip.is-active {
+            background: rgba(37, 99, 235, 0.22);
+            border-color: #3b82f6;
+            color: #93c5fd;
+        }
+        .record-card {
+            width: 100%;
+            text-align: left;
+            background: #111827;
+            border: 1px solid #1f2937;
+            border-radius: 0.9rem;
+            padding: 0.9rem 0.95rem;
+        }
+        .record-card:active { background: #1f2937; }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 0.4rem;
+            padding: 0.12rem 0.45rem;
+            font-size: 0.7rem;
+            font-weight: 600;
+            border: 1px solid transparent;
+        }
+        .sheet {
+            position: fixed;
+            inset: 0;
+            z-index: 40;
+            display: flex;
+            flex-direction: column;
+            background: #0b0f19;
+            padding-top: var(--safe-top);
+        }
+        .sheet.hidden { display: none; }
+        .sheet-body {
+            flex: 1;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+            padding: 1rem 1rem calc(6.25rem + var(--safe-bottom));
+        }
+        .sheet-actions {
+            position: absolute;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            display: flex;
+            gap: 0.6rem;
+            padding: 0.75rem 1rem calc(0.75rem + var(--safe-bottom));
+            background: #111827;
+            border-top: 1px solid #1f2937;
+        }
+        .field label { display: block; font-size: 0.8rem; color: #d1d5db; font-weight: 500; margin-bottom: 0.3rem; }
+        .field + .field { margin-top: 0.9rem; }
+        .ctl {
+            width: 100%;
+            background: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 0.7rem;
+            padding: 0.7rem 0.8rem;
+            color: #fff;
+        }
+        textarea.ctl { min-height: 8.5rem; resize: vertical; }
+        .file-actions { display: flex; gap: 0.5rem; }
+        .file-btn {
+            flex: 1;
+            min-height: 2.75rem;
+            border: 1px dashed #4b5563;
+            border-radius: 0.7rem;
+            color: #93c5fd;
+            background: #111827;
+        }
+        .bijlage-item {
+            display: flex;
+            align-items: center;
+            gap: 0.6rem;
+            padding: 0.5rem 0;
+            border-bottom: 1px solid #1f2937;
+        }
+        #toast-container { padding-top: calc(0.75rem + var(--safe-top)); }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-200 font-sans">
+    <div id="toast-container" class="fixed top-0 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+
+    <div class="app-shell">
+        <header class="px-4 pt-3 pb-2 border-b border-gray-800 bg-gray-900/80">
+            <div class="flex items-center justify-between gap-3 mb-3">
+                <div>
+                    <h1 class="text-lg font-bold text-white">Notelight</h1>
+                    <p class="text-xs text-gray-500">Mobiele weergave</p>
+                </div>
+                <a href="/" class="text-xs text-blue-400 px-2 py-1">Desktop</a>
+            </div>
+            <div class="relative">
+                <input id="search-input" type="search" placeholder="Zoek in alle velden..." autocomplete="off"
+                    class="w-full bg-gray-900 border border-gray-700 rounded-full pl-10 pr-4 py-2.5 text-white placeholder-gray-500">
+                <svg class="w-5 h-5 text-gray-500 absolute left-3 top-1/2 -translate-y-1/2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+            </div>
+        </header>
+
+        <div id="status-chips" class="chip-row pt-3"></div>
+
+        <div class="list-scroll px-4">
+            <div id="loading-overlay" class="hidden py-16 flex items-center justify-center">
+                <div class="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-500"></div>
+            </div>
+            <div id="record-list" class="space-y-3"></div>
+            <div id="empty-state" class="hidden flex flex-col items-center justify-center py-16 text-gray-500">
+                <p class="text-base">Geen records gevonden</p>
+                <p class="text-sm mt-1">Pas je zoekopdracht aan of voeg een nieuw record toe.</p>
+            </div>
+            <div id="load-more-bar" class="hidden py-4 flex items-center justify-between">
+                <p id="load-more-summary" class="text-xs text-gray-500"></p>
+                <button id="btn-load-more" type="button" class="bg-gray-800 border border-gray-700 text-gray-200 px-4 py-2 rounded-lg text-sm">Meer laden</button>
+            </div>
+        </div>
+    </div>
+
+    <nav class="bottom-nav" aria-label="Hoofdnavigatie">
+        <button type="button" class="nav-btn is-active" id="nav-list">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h10"></path></svg>
+            Records
+        </button>
+        <button type="button" class="nav-btn" id="nav-new">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"></path></svg>
+            Nieuw
+        </button>
+        <a href="/" class="nav-btn">
+            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+            Desktop
+        </a>
+    </nav>
+
+    <section id="form-sheet" class="sheet hidden" role="dialog" aria-modal="true" aria-labelledby="form-title">
+        <header class="px-3 py-2.5 border-b border-gray-800 bg-gray-900 flex items-center gap-2">
+            <button type="button" id="btn-form-back" class="p-2 text-gray-300" aria-label="Terug">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"></path></svg>
+            </button>
+            <div class="min-w-0">
+                <h2 id="form-title" class="text-base font-semibold text-white">Nieuwe invoer</h2>
+                <p id="form-subtitle" class="text-xs text-gray-500">Sla gegevens op in PocketBase</p>
+            </div>
+        </header>
+        <form id="data-form" class="sheet-body">
+            <div class="field">
+                <label for="input-titel">Titel</label>
+                <input id="input-titel" name="titel" required class="ctl" placeholder="Korte titel...">
+            </div>
+            <div class="grid grid-cols-2 gap-3">
+                <div class="field">
+                    <label for="input-status">Status</label>
+                    <select id="input-status" name="status" required class="ctl">
+                        <option value="Nieuw">Nieuw</option>
+                        <option value="In uitvoering">In uitvoering</option>
+                        <option value="Wachtend">Wachtend</option>
+                        <option value="Afgerond">Afgerond</option>
+                        <option value="Ter info">Ter info</option>
+                        <option value="Archief">Archief</option>
+                    </select>
+                </div>
+                <div class="field">
+                    <label for="input-prio">Prio</label>
+                    <select id="input-prio" name="prio" class="ctl">
+                        <option value="Low">Low</option>
+                        <option value="Medium" selected>Medium</option>
+                        <option value="High">High</option>
+                    </select>
+                </div>
+            </div>
+            <div class="field">
+                <label for="input-soort">Soort</label>
+                <select id="input-soort" name="soort" required class="ctl">
+                    <option value="">— Kies soort —</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="input-dataset">Dataset</label>
+                <select id="input-dataset" name="dataset" class="ctl">
+                    <option value="">— Dataset —</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="input-kenmerk">Kenmerk</label>
+                <select id="input-kenmerk" name="kenmerk" class="ctl">
+                    <option value="">— Kenmerk —</option>
+                </select>
+            </div>
+            <div class="field">
+                <label for="input-betrokkene">Betrokkene</label>
+                <select id="input-betrokkene" name="betrokkene" class="ctl">
+                    <option value="">— Betrokkene —</option>
+                </select>
+            </div>
+            <div class="field">
+                <label>Bijlagen</label>
+                <div class="file-actions">
+                    <button type="button" id="btn-photo" class="file-btn">Foto maken</button>
+                    <button type="button" id="btn-file" class="file-btn">Bestand</button>
+                </div>
+                <input id="input-photo" type="file" accept="image/*" capture="environment" class="sr-only" tabindex="-1">
+                <input id="input-file" type="file" multiple class="sr-only" tabindex="-1">
+                <div id="bijlage-file-list" class="mt-2"></div>
+            </div>
+            <div class="field">
+                <label for="input-omschrijving">Omschrijving</label>
+                <textarea id="input-omschrijving" name="omschrijving" required class="ctl" placeholder="Omschrijving..."></textarea>
+            </div>
+        </form>
+        <div class="sheet-actions">
+            <button type="button" id="btn-delete" class="hidden px-3 py-2.5 rounded-lg border border-red-800 text-red-300 bg-red-900/30">Verwijderen</button>
+            <button type="button" id="btn-save" class="flex-1 bg-blue-600 text-white font-medium py-2.5 rounded-lg">Opslaan</button>
+        </div>
+    </section>
+
+    <script>
+        const PB_URL = window.location.origin;
+        const COLLECTION_NAME = 'registraties';
+        const KEUZE_COLLECTION = 'keuzelijsten';
+        const PAGE_SIZE = 20;
+        const DEFAULT_STATUS = ['Nieuw', 'In uitvoering', 'Wachtend', 'Afgerond', 'Ter info', 'Archief'];
+        const CHOICE_FIELDS = [
+            { id: 'status', allowEmpty: false },
+            { id: 'soort', allowEmpty: false, placeholder: '— Kies soort —' },
+            { id: 'dataset', allowEmpty: true, placeholder: '— Dataset —' },
+            { id: 'kenmerk', allowEmpty: true, placeholder: '— Kenmerk —' },
+            { id: 'betrokkene', allowEmpty: true, placeholder: '— Betrokkene —' },
+        ];
+
+        let pb;
+        try { pb = new PocketBase(PB_URL); } catch (e) { console.error(e); }
+
+        const state = {
+            records: [],
+            searchQuery: '',
+            statusFilter: '',
+            page: 1,
+            totalItems: 0,
+            hasMore: false,
+            loadingMore: false,
+            editingId: null,
+            keuzelijsten: { byCategorie: {} },
+        };
+
+        const bijlageState = { record: null, existing: [], removed: [], pending: [] };
+
+        const els = {
+            list: document.getElementById('record-list'),
+            empty: document.getElementById('empty-state'),
+            loading: document.getElementById('loading-overlay'),
+            chips: document.getElementById('status-chips'),
+            sheet: document.getElementById('form-sheet'),
+            form: document.getElementById('data-form'),
+            formTitle: document.getElementById('form-title'),
+            formSubtitle: document.getElementById('form-subtitle'),
+            loadMoreBar: document.getElementById('load-more-bar'),
+            loadMoreSummary: document.getElementById('load-more-summary'),
+            btnLoadMore: document.getElementById('btn-load-more'),
+            btnSave: document.getElementById('btn-save'),
+            btnDelete: document.getElementById('btn-delete'),
+            bijlageList: document.getElementById('bijlage-file-list'),
+        };
+
+        function escapeHtml(str) {
+            const div = document.createElement('div');
+            div.innerText = str == null ? '' : String(str);
+            return div.innerHTML;
+        }
+
+        function showToast(title, message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const color = type === 'success' ? 'bg-green-900 border-green-700' : 'bg-red-900 border-red-700';
+            toast.className = `p-3 rounded-lg shadow-xl border ${color} text-white max-w-xs pointer-events-auto`;
+            toast.innerHTML = `<h4 class="font-medium text-sm">${escapeHtml(title)}</h4><p class="text-xs text-gray-300 mt-1">${escapeHtml(message)}</p>`;
+            container.appendChild(toast);
+            setTimeout(() => toast.remove(), 3500);
+        }
+
+        function normalizePrio(value) {
+            const n = String(value || '').trim().toLowerCase();
+            if (n === 'low') return 'Low';
+            if (n === 'high') return 'High';
+            return 'Medium';
+        }
+
+        function statusBadge(status) {
+            const map = {
+                'Nieuw': 'bg-blue-900/50 text-blue-400 border-blue-800',
+                'In uitvoering': 'bg-yellow-900/50 text-yellow-400 border-yellow-800',
+                'Wachtend': 'bg-orange-900/50 text-orange-400 border-orange-800',
+                'Afgerond': 'bg-green-900/50 text-green-400 border-green-800',
+                'Ter info': 'bg-purple-900/50 text-purple-400 border-purple-800',
+                'Archief': 'bg-gray-800 text-gray-400 border-gray-600',
+            };
+            const cls = map[status] || 'bg-gray-700 text-gray-300 border-gray-600';
+            return `<span class="badge ${cls}">${escapeHtml(status || '-')}</span>`;
+        }
+
+        function prioBadge(prio) {
+            const value = normalizePrio(prio);
+            const cls = value === 'High' ? 'text-red-400' : value === 'Low' ? 'text-green-400' : 'text-yellow-400';
+            return `<span class="${cls} text-xs font-semibold">${value}</span>`;
+        }
+
+        function formatDate(iso) {
+            if (!iso) return '';
+            try {
+                return new Date(iso).toLocaleString('nl-NL', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+            } catch {
+                return iso;
+            }
+        }
+
+        function getBijlagen(record) {
+            if (!record?.bijlage) return [];
+            return Array.isArray(record.bijlage) ? record.bijlage.filter(Boolean) : [record.bijlage];
+        }
+
+        function buildFilter() {
+            const parts = [];
+            if (state.searchQuery) {
+                const term = state.searchQuery.replace(/"/g, '\\"');
+                parts.push(`(titel ~ "${term}" || omschrijving ~ "${term}" || soort ~ "${term}" || kenmerk ~ "${term}" || dataset ~ "${term}" || betrokkene ~ "${term}")`);
+            }
+            if (state.statusFilter) {
+                parts.push(`(status = "${state.statusFilter.replace(/"/g, '\\"')}")`);
+            }
+            return parts.join(' && ');
+        }
+
+        function orderedStatusValues() {
+            const statuses = (state.keuzelijsten.byCategorie.status || []).map((i) => i.waarde);
+            const values = statuses.length ? statuses : DEFAULT_STATUS.slice();
+            const preferred = DEFAULT_STATUS.filter((value) => values.includes(value));
+            const rest = values.filter((value) => !DEFAULT_STATUS.includes(value));
+            return preferred.concat(rest);
+        }
+
+        function renderChips() {
+            const chips = [{ label: 'Alle', value: '' }, ...orderedStatusValues().map((v) => ({ label: v, value: v }))];
+            els.chips.innerHTML = chips.map((chip) =>
+                `<button type="button" class="chip ${state.statusFilter === chip.value ? 'is-active' : ''}" data-status="${escapeHtml(chip.value)}">${escapeHtml(chip.label)}</button>`
+            ).join('');
+        }
+
+        function renderList() {
+            if (!state.records.length) {
+                els.list.innerHTML = '';
+                els.empty.classList.remove('hidden');
+            } else {
+                els.empty.classList.add('hidden');
+                els.list.innerHTML = state.records.map((record) => {
+                    const files = getBijlagen(record);
+                    return `
+                        <button type="button" class="record-card" data-id="${record.id}">
+                            <div class="flex items-start justify-between gap-2">
+                                <h3 class="text-sm font-semibold text-white leading-snug">${escapeHtml(record.titel || 'Zonder titel')}</h3>
+                                ${prioBadge(record.prio)}
+                            </div>
+                            <div class="mt-2 flex flex-wrap items-center gap-1.5">
+                                ${statusBadge(record.status)}
+                                ${record.dataset ? `<span class="badge bg-gray-800 text-gray-300 border-gray-700">${escapeHtml(record.dataset)}</span>` : ''}
+                                ${record.soort ? `<span class="badge bg-gray-800 text-gray-300 border-gray-700">${escapeHtml(record.soort)}</span>` : ''}
+                            </div>
+                            <div class="mt-2 flex items-center justify-between text-xs text-gray-500">
+                                <span>${escapeHtml(record.betrokkene || '')}</span>
+                                <span>${files.length ? files.length + ' bijlage' + (files.length === 1 ? '' : 'n') : formatDate(record.updated || record.created)}</span>
+                            </div>
+                        </button>`;
+                }).join('');
+            }
+            const shown = state.records.length;
+            const total = state.totalItems || 0;
+            els.loadMoreSummary.textContent = total ? `${shown} van ${total}` : '';
+            els.loadMoreBar.classList.toggle('hidden', shown === 0);
+            els.btnLoadMore.classList.toggle('hidden', !state.hasMore);
+            els.btnLoadMore.disabled = !!state.loadingMore;
+            els.btnLoadMore.textContent = state.loadingMore ? 'Laden...' : 'Meer laden';
+        }
+
+        async function fetchData({ append = false } = {}) {
+            if (!pb) {
+                showToast('Fout', 'PocketBase niet gevonden.', 'error');
+                return;
+            }
+            if (append) {
+                if (!state.hasMore || state.loadingMore) return;
+                state.loadingMore = true;
+                state.page += 1;
+            } else {
+                state.page = 1;
+                state.loadingMore = false;
+                els.loading.classList.remove('hidden');
+            }
+            try {
+                const options = { sort: '-id', requestKey: null };
+                const filter = buildFilter();
+                if (filter) options.filter = filter;
+                const result = await pb.collection(COLLECTION_NAME).getList(state.page, PAGE_SIZE, options);
+                state.totalItems = result.totalItems;
+                state.hasMore = result.page < result.totalPages;
+                state.records = append ? [...state.records, ...result.items] : result.items;
+                renderList();
+            } catch (error) {
+                if (append) state.page = Math.max(1, state.page - 1);
+                if (error.status === 0) showToast('Verbindingsfout', `Kan PocketBase niet bereiken op ${PB_URL}.`, 'error');
+                else showToast('Fout', error.message || 'Ophalen mislukt', 'error');
+            } finally {
+                state.loadingMore = false;
+                els.loading.classList.add('hidden');
+                renderList();
+            }
+        }
+
+        function fillSelect(id, values, { allowEmpty, placeholder, current }) {
+            const select = document.getElementById(id);
+            if (!select) return;
+            const seen = new Set();
+            const unique = [];
+            values.forEach((value) => {
+                const trimmed = String(value || '').trim();
+                if (!trimmed) return;
+                const key = trimmed.toLowerCase();
+                if (seen.has(key)) return;
+                seen.add(key);
+                unique.push(trimmed);
+            });
+            select.innerHTML = '';
+            if (allowEmpty || id === 'input-soort') {
+                const empty = document.createElement('option');
+                empty.value = '';
+                empty.textContent = placeholder || '—';
+                select.appendChild(empty);
+            }
+            unique.forEach((value) => {
+                const opt = document.createElement('option');
+                opt.value = value;
+                opt.textContent = value;
+                select.appendChild(opt);
+            });
+            if (current && !unique.includes(current)) {
+                const opt = document.createElement('option');
+                opt.value = current;
+                opt.textContent = current;
+                select.appendChild(opt);
+            }
+            select.value = current || (id === 'input-status' ? 'Nieuw' : '');
+        }
+
+        function renderChoiceSelects(current = {}) {
+            CHOICE_FIELDS.forEach(({ id, allowEmpty, placeholder }) => {
+                let values = (state.keuzelijsten.byCategorie[id] || []).map((item) => item.waarde);
+                if (id === 'status') values = orderedStatusValues();
+                else if (!values.length && id === 'status') values = DEFAULT_STATUS.slice();
+                fillSelect(`input-${id}`, values, { allowEmpty, placeholder, current: current[id] || '' });
+            });
+            syncSelectColors();
+        }
+
+        async function loadKeuzelijsten() {
+            CHOICE_FIELDS.forEach(({ id }) => { state.keuzelijsten.byCategorie[id] = []; });
+            try {
+                const items = await pb.collection(KEUZE_COLLECTION).getFullList({ sort: 'categorie,waarde', requestKey: null });
+                items.forEach((item) => {
+                    const cat = item.categorie;
+                    if (!state.keuzelijsten.byCategorie[cat]) state.keuzelijsten.byCategorie[cat] = [];
+                    state.keuzelijsten.byCategorie[cat].push(item);
+                });
+            } catch (_) {
+                DEFAULT_STATUS.forEach((waarde) => {
+                    state.keuzelijsten.byCategorie.status.push({ waarde, categorie: 'status' });
+                });
+                try {
+                    const records = await pb.collection(COLLECTION_NAME).getFullList({ requestKey: null, fields: 'soort,kenmerk,dataset,betrokkene,status' });
+                    ['soort', 'kenmerk', 'dataset', 'betrokkene', 'status'].forEach((cat) => {
+                        const seen = new Set((state.keuzelijsten.byCategorie[cat] || []).map((i) => String(i.waarde).toLowerCase()));
+                        records.forEach((record) => {
+                            const waarde = String(record[cat] || '').trim();
+                            if (!waarde || seen.has(waarde.toLowerCase())) return;
+                            seen.add(waarde.toLowerCase());
+                            state.keuzelijsten.byCategorie[cat].push({ waarde, categorie: cat });
+                        });
+                    });
+                } catch (e) { console.warn(e); }
+            }
+            renderChoiceSelects();
+            renderChips();
+        }
+
+        function createClientId() {
+            try {
+                if (crypto.randomUUID) return crypto.randomUUID();
+            } catch (_) { /* ignore */ }
+            return `id-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+        }
+
+        function renderBijlageList() {
+            const existing = bijlageState.existing
+                .filter((name) => !bijlageState.removed.includes(name))
+                .map((name) => {
+                    const url = bijlageState.record ? pb.files.getUrl(bijlageState.record, name) : '#';
+                    return `<div class="bijlage-item"><a class="text-sm text-blue-400 truncate flex-1" href="${url}" target="_blank" rel="noopener">${escapeHtml(name)}</a><button type="button" class="text-red-400 text-sm" data-remove-existing="${escapeHtml(name)}">Verwijder</button></div>`;
+                });
+            const pending = bijlageState.pending.map((item) =>
+                `<div class="bijlage-item"><span class="text-sm text-gray-300 truncate flex-1">${escapeHtml(item.file.name)}</span><button type="button" class="text-red-400 text-sm" data-remove-pending="${item.id}">Verwijder</button></div>`
+            );
+            els.bijlageList.innerHTML = existing.concat(pending).join('') || '<p class="text-xs text-gray-500 mt-2">Nog geen bijlagen.</p>';
+        }
+
+        function syncSelectColors() {
+            const status = document.getElementById('input-status');
+            const prio = document.getElementById('input-prio');
+            const statusColors = {
+                'Nieuw': '#60a5fa',
+                'In uitvoering': '#facc15',
+                'Wachtend': '#fb923c',
+                'Afgerond': '#4ade80',
+                'Ter info': '#c084fc',
+                'Archief': '#9ca3af',
+            };
+            const prioColors = { Low: '#4ade80', Medium: '#facc15', High: '#f87171' };
+            if (status) status.style.color = statusColors[status.value] || '#e5e7eb';
+            if (prio) prio.style.color = prioColors[normalizePrio(prio.value)] || '#facc15';
+        }
+
+        function resetBijlage() {
+            bijlageState.record = null;
+            bijlageState.existing = [];
+            bijlageState.removed = [];
+            bijlageState.pending = [];
+            document.getElementById('input-photo').value = '';
+            document.getElementById('input-file').value = '';
+            renderBijlageList();
+        }
+
+        function addPendingFiles(fileList) {
+            const files = [...fileList].filter((file) => file instanceof File && file.size > 0);
+            if (!files.length) {
+                showToast('Geen bestand', 'Selecteer een bestand groter dan 0 bytes.', 'error');
+                return;
+            }
+            files.forEach((file) => bijlageState.pending.push({ id: createClientId(), file }));
+            renderBijlageList();
+        }
+
+        function payloadFromForm() {
+            const data = new FormData(els.form);
+            return {
+                titel: data.get('titel') || '',
+                status: data.get('status') || '',
+                prio: normalizePrio(data.get('prio')),
+                soort: data.get('soort') || '',
+                kenmerk: data.get('kenmerk') || '',
+                betrokkene: data.get('betrokkene') || '',
+                dataset: data.get('dataset') || '',
+                omschrijving: data.get('omschrijving') || '',
+            };
+        }
+
+        function bijlagePayload({ isUpdate, appendMode = 'plus' }) {
+            const payload = {};
+            if (isUpdate) {
+                if (bijlageState.removed.length) payload['bijlage-'] = [...bijlageState.removed];
+                if (bijlageState.pending.length) {
+                    const files = bijlageState.pending.map(({ file }) => file);
+                    payload[appendMode === 'plain' ? 'bijlage' : 'bijlage+'] = files.length === 1 ? files[0] : files;
+                }
+                return payload;
+            }
+            if (bijlageState.pending.length) {
+                const files = bijlageState.pending.map(({ file }) => file);
+                payload.bijlage = files.length === 1 ? files[0] : files;
+            }
+            return payload;
+        }
+
+        function setRecordUrl(id) {
+            const url = new URL(window.location.href);
+            if (id) url.searchParams.set('id', id);
+            else url.searchParams.delete('id');
+            history.replaceState(null, '', url.pathname + url.search);
+        }
+
+        function openForm(record) {
+            els.sheet.classList.remove('hidden');
+            document.body.style.overflow = 'hidden';
+            if (record) {
+                state.editingId = record.id;
+                setRecordUrl(record.id);
+                els.formTitle.textContent = 'Record wijzigen';
+                els.formSubtitle.textContent = record.titel || 'Bewerk de geselecteerde data';
+                els.btnDelete.classList.remove('hidden');
+                renderChoiceSelects(record);
+                document.getElementById('input-titel').value = record.titel || '';
+                document.getElementById('input-omschrijving').value = record.omschrijving || '';
+                document.getElementById('input-prio').value = normalizePrio(record.prio);
+                bijlageState.record = record;
+                bijlageState.existing = getBijlagen(record);
+                bijlageState.removed = [];
+                bijlageState.pending = [];
+                renderBijlageList();
+            } else {
+                state.editingId = null;
+                setRecordUrl(null);
+                els.form.reset();
+                els.formTitle.textContent = 'Nieuwe invoer';
+                els.formSubtitle.textContent = 'Sla gegevens op in PocketBase';
+                els.btnDelete.classList.add('hidden');
+                document.getElementById('input-status').value = 'Nieuw';
+                document.getElementById('input-prio').value = 'Medium';
+                renderChoiceSelects();
+                resetBijlage();
+            }
+            syncSelectColors();
+        }
+
+        function closeForm() {
+            els.sheet.classList.add('hidden');
+            document.body.style.overflow = '';
+            state.editingId = null;
+            setRecordUrl(null);
+        }
+
+        async function saveRecord() {
+            if (!els.form.checkValidity()) {
+                els.form.reportValidity();
+                return;
+            }
+            const editingId = state.editingId;
+            const pendingCount = bijlageState.pending.length;
+            const expected = bijlageState.existing.length - bijlageState.removed.length + pendingCount;
+            const payload = { ...payloadFromForm(), ...bijlagePayload({ isUpdate: Boolean(editingId) }) };
+            els.btnSave.disabled = true;
+            els.btnSave.textContent = 'Bezig...';
+            try {
+                if (editingId) {
+                    let saved = await pb.collection(COLLECTION_NAME).update(editingId, payload);
+                    if (pendingCount > 0 && getBijlagen(saved).length === bijlageState.existing.length) {
+                        saved = await pb.collection(COLLECTION_NAME).update(editingId, {
+                            ...payloadFromForm(),
+                            ...bijlagePayload({ isUpdate: true, appendMode: 'plain' }),
+                        });
+                    }
+                    if (pendingCount > 0 && getBijlagen(saved).length < expected) {
+                        throw new Error('Bijlagen konden niet worden opgeslagen.');
+                    }
+                    showToast('Succes', 'Record is gewijzigd');
+                } else {
+                    const created = await pb.collection(COLLECTION_NAME).create({ ...payloadFromForm(), ...bijlagePayload({ isUpdate: false }) });
+                    if (pendingCount > 0 && getBijlagen(created).length < pendingCount) {
+                        throw new Error('Record is aangemaakt, maar bijlagen ontbreken.');
+                    }
+                    showToast('Succes', 'Nieuw record opgeslagen');
+                }
+                closeForm();
+                await fetchData();
+            } catch (error) {
+                showToast('Fout', error?.data?.message || error.message || 'Opslaan mislukt', 'error');
+            } finally {
+                els.btnSave.disabled = false;
+                els.btnSave.textContent = 'Opslaan';
+            }
+        }
+
+        async function deleteCurrent() {
+            if (!state.editingId) return;
+            const titel = document.getElementById('input-titel').value.trim() || 'dit record';
+            if (!confirm(`Weet je zeker dat je "${titel}" wilt verwijderen?`)) return;
+            try {
+                await pb.collection(COLLECTION_NAME).delete(state.editingId);
+                showToast('Verwijderd', 'Record is verwijderd.');
+                closeForm();
+                await fetchData();
+            } catch (error) {
+                showToast('Fout', 'Verwijderen mislukt: ' + error.message, 'error');
+            }
+        }
+
+        async function openFromUrl() {
+            const id = new URLSearchParams(window.location.search).get('id');
+            if (!id || !pb) return;
+            try {
+                const record = await pb.collection(COLLECTION_NAME).getOne(id);
+                openForm(record);
+            } catch (_) {
+                showToast('Fout', 'Record uit de link kon niet worden geopend.', 'error');
+            }
+        }
+
+        function setupEvents() {
+            let searchTimer = null;
+            document.getElementById('search-input').addEventListener('input', (e) => {
+                clearTimeout(searchTimer);
+                searchTimer = setTimeout(() => {
+                    state.searchQuery = e.target.value.trim();
+                    fetchData();
+                }, 400);
+            });
+            els.chips.addEventListener('click', (e) => {
+                const btn = e.target.closest('[data-status]');
+                if (!btn) return;
+                state.statusFilter = btn.dataset.status || '';
+                renderChips();
+                fetchData();
+            });
+            els.list.addEventListener('click', (e) => {
+                const card = e.target.closest('[data-id]');
+                if (card) {
+                    const record = state.records.find((item) => item.id === card.dataset.id);
+                    if (record) openForm(record);
+                }
+            });
+            els.btnLoadMore.addEventListener('click', () => fetchData({ append: true }));
+            document.getElementById('nav-new').addEventListener('click', () => openForm(null));
+            document.getElementById('nav-list').addEventListener('click', closeForm);
+            document.getElementById('btn-form-back').addEventListener('click', closeForm);
+            els.btnSave.addEventListener('click', saveRecord);
+            els.btnDelete.addEventListener('click', deleteCurrent);
+            document.getElementById('btn-photo').addEventListener('click', () => document.getElementById('input-photo').click());
+            document.getElementById('btn-file').addEventListener('click', () => document.getElementById('input-file').click());
+            document.getElementById('input-status').addEventListener('change', syncSelectColors);
+            document.getElementById('input-prio').addEventListener('change', syncSelectColors);
+            document.getElementById('input-photo').addEventListener('change', (e) => addPendingFiles(e.target.files));
+            document.getElementById('input-file').addEventListener('change', (e) => addPendingFiles(e.target.files));
+            els.bijlageList.addEventListener('click', (e) => {
+                const existing = e.target.closest('[data-remove-existing]');
+                const pending = e.target.closest('[data-remove-pending]');
+                if (existing) {
+                    bijlageState.removed.push(existing.dataset.removeExisting);
+                    renderBijlageList();
+                }
+                if (pending) {
+                    bijlageState.pending = bijlageState.pending.filter((item) => item.id !== pending.dataset.removePending);
+                    renderBijlageList();
+                }
+            });
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            setupEvents();
+            await loadKeuzelijsten();
+            await fetchData();
+            await openFromUrl();
+        });
+    </script>
+</body>
+</html>
