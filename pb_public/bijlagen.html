@@ -221,7 +221,7 @@
     </main>
 
     <script>
-        const PB_URL = 'http://127.0.0.1:8090';
+        const PB_URL = window.location.origin;
         const COLLECTION_NAME = 'registraties';
 
         const pb = new PocketBase(PB_URL);
