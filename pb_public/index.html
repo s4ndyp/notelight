@@ -405,7 +405,7 @@
         #sidebar {
             width: 384px;
             min-width: 280px;
-            max-width: 700px;
+            max-width: 1200px;
             flex-shrink: 0;
         }
         .sidebar-resizer {
@@ -2351,9 +2351,11 @@
         function setupSidebarResize() {
             const sidebar = document.getElementById('sidebar');
             const resizer = document.getElementById('sidebar-resizer');
+            const SIDEBAR_MIN_WIDTH = 280;
+            const SIDEBAR_MAX_WIDTH = 1200;
             const savedWidth = parseInt(localStorage.getItem('pbApp_sidebarWidth'), 10);
 
-            if (savedWidth >= 280 && savedWidth <= 700) {
+            if (savedWidth >= SIDEBAR_MIN_WIDTH && savedWidth <= SIDEBAR_MAX_WIDTH) {
                 sidebar.style.width = savedWidth + 'px';
             }
 
@@ -2365,7 +2367,10 @@
                 document.body.classList.add('is-resizing');
 
                 const onMove = (moveEvent) => {
-                    const newWidth = Math.min(700, Math.max(280, startWidth + moveEvent.clientX - startX));
+                    const newWidth = Math.min(
+                        SIDEBAR_MAX_WIDTH,
+                        Math.max(SIDEBAR_MIN_WIDTH, startWidth + moveEvent.clientX - startX)
+                    );
                     sidebar.style.width = newWidth + 'px';
                 };
 
