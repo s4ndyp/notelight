@@ -451,7 +451,16 @@
         #input-status option[value="Ter info"] { color: #c084fc; }
         #input-status option[value="Archief"] { color: #9ca3af; }
 
-        .form-row-titel-status {
+        #input-prio {
+            font-weight: 500;
+        }
+        #input-prio option { color: #d1d5db; background: #1f2937; }
+        #input-prio option[value="Low"] { color: #4ade80; }
+        #input-prio option[value="Medium"] { color: #facc15; }
+        #input-prio option[value="High"] { color: #f87171; }
+
+        .form-row-titel-status,
+        .form-row-soort-prio {
             display: flex;
             align-items: flex-start;
             gap: 0.75rem;
@@ -460,16 +469,66 @@
             flex: 1;
             min-width: 0;
         }
-        .form-field-status {
+        .form-field-status,
+        .form-field-prio {
             flex-shrink: 0;
             width: 9.5rem;
         }
+        .form-field-soort {
+            flex: 1;
+            min-width: 0;
+        }
         .form-field-titel .field-with-copy > input,
-        .form-field-status .field-with-copy > select {
+        .form-field-status .field-with-copy > select,
+        .form-field-prio .field-with-copy > select {
             width: 100%;
             max-width: 100%;
             flex: 1;
             min-width: 0;
+        }
+        .form-field-soort .field-with-copy > input {
+            width: 100%;
+            max-width: 100%;
+            flex: 1;
+            min-width: 0;
+        }
+
+        #data-table th[data-col="prio"],
+        #data-table td[data-col="prio"] {
+            width: 3.25rem;
+            min-width: 3.25rem;
+            max-width: 3.25rem;
+            text-align: center;
+            white-space: nowrap;
+        }
+        .prio-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 1.75rem;
+            height: 1.75rem;
+            border-radius: 0.45rem;
+            border: 1px solid transparent;
+            pointer-events: none;
+        }
+        .prio-badge svg {
+            width: 0.95rem;
+            height: 0.95rem;
+        }
+        .prio-badge.is-low {
+            color: #4ade80;
+            background: rgba(22, 101, 52, 0.35);
+            border-color: rgba(74, 222, 128, 0.35);
+        }
+        .prio-badge.is-medium {
+            color: #facc15;
+            background: rgba(113, 63, 18, 0.4);
+            border-color: rgba(250, 204, 21, 0.35);
+        }
+        .prio-badge.is-high {
+            color: #f87171;
+            background: rgba(127, 29, 29, 0.4);
+            border-color: rgba(248, 113, 113, 0.4);
         }
     </style>
 </head>
@@ -544,16 +603,31 @@
                     </div>
                 </div>
 
-                <!-- Soort -->
-                <div>
-                    <label class="block text-sm font-medium text-gray-300 mb-1">Soort</label>
-                    <div class="field-with-copy field-fixed">
-                        <input type="text" name="soort" id="input-soort" list="datalist-soort" required autocomplete="off" class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" placeholder="Kies of typ een soort...">
-                        <button type="button" class="btn-copy" onclick="copyFieldValue('input-soort')" title="Kopieer naar klembord">
-                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
-                        </button>
+                <!-- Soort & Prio -->
+                <div class="form-row-soort-prio">
+                    <div class="form-field-soort">
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Soort</label>
+                        <div class="field-with-copy">
+                            <input type="text" name="soort" id="input-soort" list="datalist-soort" required autocomplete="off" class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" placeholder="Kies of typ een soort...">
+                            <button type="button" class="btn-copy" onclick="copyFieldValue('input-soort')" title="Kopieer naar klembord">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            </button>
+                        </div>
+                        <datalist id="datalist-soort"></datalist>
                     </div>
-                    <datalist id="datalist-soort"></datalist>
+                    <div class="form-field-prio">
+                        <label class="block text-sm font-medium text-gray-300 mb-1">Prio</label>
+                        <div class="field-with-copy">
+                            <select name="prio" id="input-prio" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-yellow-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none">
+                                <option value="Low">Low</option>
+                                <option value="Medium" selected>Medium</option>
+                                <option value="High">High</option>
+                            </select>
+                            <button type="button" class="btn-copy" onclick="copyFieldValue('input-prio')" title="Kopieer naar klembord">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
+                            </button>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- Kenmerk -->
@@ -688,6 +762,7 @@
                                     <option value="dataset">Dataset</option>
                                     <option value="betrokkene">Betrokkene</option>
                                     <option value="status">Status</option>
+                                    <option value="prio">Prio</option>
                                 </select>
                                 <select id="filter-operator" class="w-full bg-gray-900 border border-gray-700 rounded px-2 py-1.5 text-sm text-white focus:outline-none focus:border-blue-500">
                                     <option value="~">Bevat (gedeeltelijk)</option>
@@ -734,6 +809,7 @@
                 <table id="data-table" class="w-full text-left border-collapse text-sm">
                     <thead class="bg-gray-850/80 text-gray-400 text-xs uppercase tracking-wider sticky top-0 z-10 backdrop-blur-md">
                         <tr>
+                            <th data-col="prio" class="font-semibold border-b border-gray-800 text-center" title="Prio">Prio</th>
                             <th data-col="dataset" class="font-semibold border-b border-gray-800">Dataset</th>
                             <th data-col="titel" class="font-semibold border-b border-gray-800">Titel</th>
                             <th data-col="soort" class="font-semibold border-b border-gray-800">Soort</th>
@@ -792,6 +868,7 @@
                 filter: f.filter
             })),
             columns: [
+                { id: 'prio', label: 'Prio', visible: true },
                 { id: 'dataset', label: 'Dataset', visible: true },
                 { id: 'titel', label: 'Titel', visible: true },
                 { id: 'soort', label: 'Soort', visible: true },
@@ -912,6 +989,35 @@
             }
         }
 
+        function normalizePrio(value) {
+            const normalized = String(value || '').trim().toLowerCase();
+            if (normalized === 'low') return 'Low';
+            if (normalized === 'high') return 'High';
+            return 'Medium';
+        }
+
+        function getPrioColorClass(prio) {
+            switch (normalizePrio(prio)) {
+                case 'Low': return 'text-green-400';
+                case 'High': return 'text-red-400';
+                default: return 'text-yellow-400';
+            }
+        }
+
+        function renderPrioBadge(prio) {
+            const value = normalizePrio(prio);
+            const className = value === 'Low' ? 'is-low' : value === 'High' ? 'is-high' : 'is-medium';
+            let icon = '';
+            if (value === 'High') {
+                icon = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.25" d="M5 15l7-7 7 7"></path></svg>';
+            } else if (value === 'Low') {
+                icon = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.25" d="M19 9l-7 7-7-7"></path></svg>';
+            } else {
+                icon = '<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.25" d="M5 12h14"></path></svg>';
+            }
+            return `<span class="prio-badge ${className}" title="Prio: ${value}">${icon}<span class="sr-only">${value}</span></span>`;
+        }
+
         const FORM_VALUE_COLOR_CLASSES = [
             ...DATASET_TEXT_COLORS,
             'text-blue-400',
@@ -919,6 +1025,7 @@
             'text-orange-400',
             'text-green-400',
             'text-purple-400',
+            'text-red-400',
             'text-gray-400',
             'text-gray-300',
             'text-gray-500',
@@ -944,9 +1051,17 @@
             setFormFieldColor(select, getStatusColorClass(select.value));
         }
 
+        function syncPrioInputColor() {
+            const select = document.getElementById('input-prio');
+            if (!select) return;
+            select.value = normalizePrio(select.value);
+            setFormFieldColor(select, getPrioColorClass(select.value));
+        }
+
         function syncColoredFormFields() {
             syncDatasetInputColor();
             syncStatusInputColor();
+            syncPrioInputColor();
         }
 
         function renderDatasetHTML(dataset) {
@@ -1259,6 +1374,7 @@
             return {
                 titel: formData.get('titel') || '',
                 status: formData.get('status') || '',
+                prio: normalizePrio(formData.get('prio')),
                 soort: formData.get('soort') || '',
                 kenmerk: formData.get('kenmerk') || '',
                 betrokkene: formData.get('betrokkene') || '',
@@ -1445,6 +1561,7 @@
                 };
 
                 tr.innerHTML = `
+                    <td data-col="prio" class="border-b border-gray-800 text-center">${renderPrioBadge(record.prio)}</td>
                     <td data-col="dataset" class="border-b border-gray-800 truncate" title="${record.dataset || ''}">${renderDatasetHTML(record.dataset)}</td>
                     <td data-col="titel" class="border-b border-gray-800 truncate text-gray-200 font-semibold" title="${record.titel || ''}">${safeHTML(record.titel)}</td>
                     <td data-col="soort" class="border-b border-gray-800 truncate text-gray-400" title="${record.soort || ''}">${safeHTML(record.soort)}</td>
@@ -1628,6 +1745,7 @@
             document.getElementById('input-dataset').value = record.dataset || '';
             document.getElementById('input-betrokkene').value = record.betrokkene || '';
             document.getElementById('input-status').value = record.status || 'Nieuw';
+            document.getElementById('input-prio').value = normalizePrio(record.prio);
             syncColoredFormFields();
             
             setBijlageFromRecord(record);
@@ -1734,6 +1852,7 @@
             document.getElementById('input-dataset').addEventListener('input', syncDatasetInputColor);
             document.getElementById('input-dataset').addEventListener('change', syncDatasetInputColor);
             document.getElementById('input-status').addEventListener('change', syncStatusInputColor);
+            document.getElementById('input-prio').addEventListener('change', syncPrioInputColor);
 
             // Filter toepassen knop
             document.getElementById('btn-apply-filter').addEventListener('click', () => {
