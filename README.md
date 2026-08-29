@@ -58,6 +58,7 @@ Centrale waarden voor dropdowns. De app vult bekende statussen en bestaande reco
 |------|------|-------------|
 | `categorie` | select of text | `status`, `soort`, `kenmerk`, `dataset`, `betrokkene` |
 | `waarde` | text | de zichtbare keuze |
+| `kleur` | text (optioneel) | hexkleur voor `dataset` en `soort`, bijv. `#60a5fa` |
 
 Aanbevolen: unieke index of zorgvuldig beheer zodat dezelfde `categorie`+`waarde` niet dubbel voorkomt.
 
@@ -65,7 +66,8 @@ In de UI:
 
 - velden zijn **alleen keuzelijsten** (geen vrije tekst meer);
 - via **+** voeg je met een extra handeling een nieuwe centrale keuze toe;
-- via **Keuzelijsten** beheer je alles centraal (toevoegen/verwijderen).
+- via **Keuzelijsten** beheer je alles centraal (toevoegen/verwijderen);
+- bij **Dataset** en **Soort** kun je per waarde een kleur instellen (kleurenkiezer); zonder `kleur`-veld in PocketBase worden kleuren lokaal in de browser bewaard.
 
 Zonder deze collectie blijft de app werken met ingebouwde statussen; andere dropdowns blijven dan leeg tot de collectie bestaat.
 
@@ -84,6 +86,7 @@ Zonder deze collectie blijven voorkeuren in `localStorage` van de browser.
 
 - **Meer laden**: tabel laadt batches van 50 records; onderaan “Meer laden”.
 - **Exporteren**: CSV (Excel-vriendelijk, UTF-8 BOM) van de huidige zoek-/filterset; alleen kolommen die in de tabel zichtbaar zijn.
-- **Deep links**: `index.html?id=<recordId>` opent een record; galerij linkt door naar bewerken.
-- **Keuzelijsten**: zie hierboven.
+- **Deep links**: `/?id=<recordId>` opent een record; `/?gallery=1` opent de bijlagen-galerij; galerij linkt door naar bewerken.
+- **Keuzelijsten**: zie hierboven (incl. kleuren voor Dataset/Soort).
+- **Bijlagen galerij**: modal in de hoofdapp (zelfde patroon als Keuzelijsten).
 - **Voorkeuren sync**: zie hierboven.
