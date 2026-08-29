@@ -283,14 +283,20 @@
 
             const title = record.titel?.trim() || 'Zonder titel';
             const meta = [record.soort, record.status].filter(Boolean).join(' · ');
+            const editUrl = `index.html?id=${encodeURIComponent(record.id)}`;
 
             return `
                 <article class="gallery-group">
-                    <h2 class="gallery-group-title" title="${escapeAttr(title)}">${escapeAttr(title)}</h2>
+                    <h2 class="gallery-group-title" title="${escapeAttr(title)}">
+                        <a href="${editUrl}" class="hover:text-blue-400 transition-colors">${escapeAttr(title)}</a>
+                    </h2>
                     <div class="gallery-group-box">
                         ${files.map(fileName => renderThumb(record, fileName)).join('')}
                     </div>
-                    ${meta ? `<p class="gallery-meta">${escapeAttr(meta)}</p>` : ''}
+                    <p class="gallery-meta">
+                        ${meta ? `${escapeAttr(meta)} · ` : ''}
+                        <a href="${editUrl}" class="text-blue-400 hover:text-blue-300">Record openen</a>
+                    </p>
                 </article>
             `;
         }

@@ -79,6 +79,78 @@
         .btn-copy:hover { background: #374151; color: #60a5fa; border-color: #4b5563; }
         .btn-copy:active { transform: scale(0.95); }
 
+        .choice-field { display: flex; gap: 0.5rem; align-items: stretch; }
+        .choice-field > select { flex: 1; min-width: 0; }
+        .btn-choice-add {
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 2.5rem;
+            height: 2.5rem;
+            background: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 0.5rem;
+            color: #9ca3af;
+            font-size: 1.15rem;
+            line-height: 1;
+            transition: color 0.15s, background 0.15s, border-color 0.15s;
+        }
+        .btn-choice-add:hover { background: #374151; color: #4ade80; border-color: #4b5563; }
+        .field-fixed .choice-field > select { width: 14rem; max-width: 14rem; flex: 0 0 14rem; }
+        .form-field-status .choice-field > select,
+        .form-field-prio .field-with-copy > select { width: 11rem; max-width: 11rem; }
+        .form-field-soort .choice-field > select { width: 100%; }
+
+        #load-more-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 1rem;
+            padding: 0.85rem 1rem;
+            border-top: 1px solid #1f2937;
+            background: #111827;
+        }
+        #load-more-bar.hidden { display: none; }
+        #btn-load-more:disabled { opacity: 0.55; cursor: wait; }
+
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            z-index: 60;
+            background: rgba(3, 7, 18, 0.72);
+            backdrop-filter: blur(4px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 1.5rem;
+        }
+        .modal-backdrop.hidden { display: none; }
+        .modal-panel {
+            width: min(40rem, 100%);
+            max-height: min(85vh, 44rem);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            background: #111827;
+            border: 1px solid #374151;
+            border-radius: 0.9rem;
+            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.45);
+        }
+        .modal-body { overflow-y: auto; padding: 1rem 1.25rem 1.25rem; }
+        .keuze-cat-block + .keuze-cat-block { margin-top: 1.25rem; }
+        .keuze-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.45rem 0.6rem;
+            border-radius: 0.45rem;
+            background: #1f2937;
+            border: 1px solid #374151;
+        }
+        .keuze-item + .keuze-item { margin-top: 0.35rem; }
+
         .field-toolbar {
             display: flex;
             flex-direction: column;
@@ -474,11 +546,11 @@
         }
         .form-header-dataset {
             flex-shrink: 0;
-            /* Invoerveld ≥ 26 tekens + kopieerknop (2.5rem) + gap (0.5rem) */
-            min-width: calc(26ch + 3rem);
-            width: max(12rem, calc(26ch + 3rem));
+            /* Select ≥ 26 tekens + +knop + kopieerknop */
+            min-width: calc(26ch + 6rem);
+            width: max(14rem, calc(26ch + 6rem));
         }
-        .form-header-dataset .field-with-copy > input {
+        .form-header-dataset .choice-field > select {
             width: 100%;
             max-width: 100%;
             flex: 1;
@@ -594,6 +666,10 @@
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
                 Bijlagen galerij
             </a>
+            <button type="button" id="btn-keuzelijsten" class="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-400 transition-colors" title="Beheer centrale keuzelijsten">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h14"></path></svg>
+                Keuzelijsten
+            </button>
         </div>
         <div class="p-6 border-b border-gray-800 transition-colors duration-300" id="form-header-bg">
             <div class="form-header-top">
@@ -606,13 +682,15 @@
                 </div>
                 <div class="form-header-dataset">
                     <label class="block text-xs font-medium text-gray-400 mb-1">Dataset</label>
-                    <div class="field-with-copy">
-                        <input type="text" name="dataset" id="input-dataset" form="data-form" list="datalist-dataset" autocomplete="off" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" placeholder="Dataset...">
+                    <div class="choice-field">
+                        <select name="dataset" id="input-dataset" form="data-form" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none">
+                            <option value="">— Dataset —</option>
+                        </select>
+                        <button type="button" class="btn-choice-add" data-categorie="dataset" title="Nieuwe dataset toevoegen">+</button>
                         <button type="button" class="btn-copy" onclick="copyFieldValue('input-dataset')" title="Kopieer naar klembord">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                         </button>
                     </div>
-                    <datalist id="datalist-dataset"></datalist>
                 </div>
             </div>
         </div>
@@ -632,8 +710,8 @@
                     </div>
                     <div class="form-field-status">
                         <label class="block text-sm font-medium text-gray-300 mb-1">Status</label>
-                        <div class="field-with-copy">
-                            <select name="status" id="input-status" class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none">
+                        <div class="choice-field">
+                            <select name="status" id="input-status" required class="bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none">
                                 <option value="Nieuw">Nieuw</option>
                                 <option value="In uitvoering">In uitvoering</option>
                                 <option value="Wachtend">Wachtend</option>
@@ -641,6 +719,7 @@
                                 <option value="Ter info">Ter info</option>
                                 <option value="Archief">Archief</option>
                             </select>
+                            <button type="button" class="btn-choice-add" data-categorie="status" title="Nieuwe status toevoegen">+</button>
                             <button type="button" class="btn-copy" onclick="copyFieldValue('input-status')" title="Kopieer naar klembord">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                             </button>
@@ -652,13 +731,15 @@
                 <div class="form-row-soort-prio">
                     <div class="form-field-soort">
                         <label class="block text-sm font-medium text-gray-300 mb-1">Soort</label>
-                        <div class="field-with-copy">
-                            <input type="text" name="soort" id="input-soort" list="datalist-soort" required autocomplete="off" class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" placeholder="Kies of typ een soort...">
+                        <div class="choice-field">
+                            <select name="soort" id="input-soort" required class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none">
+                                <option value="">— Kies soort —</option>
+                            </select>
+                            <button type="button" class="btn-choice-add" data-categorie="soort" title="Nieuwe soort toevoegen">+</button>
                             <button type="button" class="btn-copy" onclick="copyFieldValue('input-soort')" title="Kopieer naar klembord">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                             </button>
                         </div>
-                        <datalist id="datalist-soort"></datalist>
                     </div>
                     <div class="form-field-prio">
                         <label class="block text-sm font-medium text-gray-300 mb-1">Prio</label>
@@ -678,25 +759,29 @@
                 <!-- Kenmerk -->
                 <div>
                     <label class="block text-sm font-medium text-gray-300 mb-1">Kenmerk</label>
-                    <div class="field-with-copy field-fixed">
-                        <input type="text" name="kenmerk" id="input-kenmerk" list="datalist-kenmerk" autocomplete="off" class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" placeholder="Kies of typ een kenmerk...">
+                    <div class="choice-field field-fixed">
+                        <select name="kenmerk" id="input-kenmerk" class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none">
+                            <option value="">— Kenmerk —</option>
+                        </select>
+                        <button type="button" class="btn-choice-add" data-categorie="kenmerk" title="Nieuw kenmerk toevoegen">+</button>
                         <button type="button" class="btn-copy" onclick="copyFieldValue('input-kenmerk')" title="Kopieer naar klembord">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                         </button>
                     </div>
-                    <datalist id="datalist-kenmerk"></datalist>
                 </div>
 
                 <!-- Betrokkene -->
                 <div>
                     <label class="block text-sm font-medium text-gray-300 mb-1">Betrokkene</label>
-                    <div class="field-with-copy field-fixed">
-                        <input type="text" name="betrokkene" id="input-betrokkene" list="datalist-betrokkene" autocomplete="off" class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors" placeholder="Kies of typ een betrokkene...">
+                    <div class="choice-field field-fixed">
+                        <select name="betrokkene" id="input-betrokkene" class="bg-gray-800 border border-gray-700 rounded-lg px-4 py-2 text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors appearance-none">
+                            <option value="">— Betrokkene —</option>
+                        </select>
+                        <button type="button" class="btn-choice-add" data-categorie="betrokkene" title="Nieuwe betrokkene toevoegen">+</button>
                         <button type="button" class="btn-copy" onclick="copyFieldValue('input-betrokkene')" title="Kopieer naar klembord">
                             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"></path></svg>
                         </button>
                     </div>
-                    <datalist id="datalist-betrokkene"></datalist>
                 </div>
 
                 <!-- Bijlagen -->
@@ -785,6 +870,11 @@
                     </div>
                     <input type="text" id="search-input" placeholder="Zoek in alle velden..." class="w-64 bg-gray-900 border border-gray-700 rounded-full pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all focus:w-80 placeholder-gray-500 shadow-inner">
                 </div>
+
+                <button id="btn-export" type="button" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2" title="Exporteer gefilterde records als CSV (Excel)">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v2a2 2 0 002 2h12a2 2 0 002-2v-2M7 10l5 5m0 0l5-5m-5 5V4"></path></svg>
+                    Exporteren
+                </button>
 
                 <!-- Filter Knop -->
                 <div class="relative">
@@ -879,6 +969,12 @@
                         <!-- Rijen worden hier dynamisch ingeladen -->
                     </tbody>
                 </table>
+                <div id="load-more-bar" class="hidden">
+                    <p id="load-more-summary" class="text-xs text-gray-500"></p>
+                    <button id="btn-load-more" type="button" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors">
+                        Meer laden
+                    </button>
+                </div>
                 <div id="empty-state" class="hidden flex flex-col items-center justify-center py-16 text-gray-500">
                     <svg class="w-16 h-16 mb-4 text-gray-700" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4"></path></svg>
                     <p class="text-lg">Geen records gevonden</p>
@@ -888,6 +984,24 @@
         </div>
     </main>
 
+    <div id="keuzelijsten-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="keuzelijsten-title">
+        <div class="modal-panel">
+            <div class="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-800">
+                <div>
+                    <h2 id="keuzelijsten-title" class="text-lg font-semibold text-white">Keuzelijsten beheren</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">Centrale waarden voor status, soort, kenmerk, dataset en betrokkene.</p>
+                </div>
+                <button type="button" id="btn-keuzelijsten-close" class="text-gray-500 hover:text-white transition-colors p-1" title="Sluiten">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div id="keuzelijsten-body" class="modal-body">
+                <p class="text-sm text-gray-500">Laden...</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="features.js"></script>
     <script>
         // --- Configuratie ---
         // Zelfde origin als deze pagina (lokaal, LAN of Docker). Geen 127.0.0.1:
@@ -914,6 +1028,11 @@
             editingId: null, // Toegevoegd voor bewerkingsmodus
             sortField: 'created',
             sortDirection: 'desc',
+            page: 1,
+            pageSize: 50,
+            totalItems: 0,
+            hasMore: false,
+            loadingMore: false,
             savedFilters: JSON.parse(localStorage.getItem('pbApp_savedFilters') || '[]').map((f, i) => ({
                 id: f.id || `sf-${Date.now()}-${i}`,
                 name: f.name,
@@ -931,7 +1050,9 @@
                 { id: 'bijlage', label: 'Bijlagen', visible: true },
                 { id: 'created', label: 'Aangemaakt', visible: true },
                 { id: 'updated', label: 'Gewijzigd', visible: true },
-            ]
+            ],
+            keuzelijsten: { available: false, items: [], byCategorie: {} },
+            voorkeuren: { available: false, recordId: null, syncTimer: null, ready: false },
         };
 
         // Migreer oude opgeslagen filters naar id's en verwijder verouderde actieve selecties
@@ -1001,8 +1122,6 @@
             removed: [],
             pending: []
         };
-
-        const SUGGESTION_FIELDS = ['soort', 'kenmerk', 'dataset', 'betrokkene'];
 
         const DATASET_TEXT_COLORS = [
             'text-blue-400',
@@ -1128,6 +1247,7 @@
 
         function savePinnedRecordIds() {
             localStorage.setItem('pbApp_pinnedRecordIds', JSON.stringify(state.pinnedRecordIds));
+            window.NotelightFeatures?.scheduleVoorkeurenSync?.();
         }
 
         function confirmAction(message) {
@@ -1168,23 +1288,56 @@
         // --- Initialisatie ---
         async function init() {
             document.getElementById('pb-admin-link').href = `${PB_URL}/_/`;
+            exposeNotelightCore();
+            window.NotelightFeatures?.wireUi?.();
             setupSidebarResize();
             setupTableSort();
             setupColumnResize();
             setupBijlageUpload();
             await setupOmschrijvingEditor();
             setupEventListeners();
+            await window.NotelightFeatures?.loadVoorkeuren?.();
             renderColumnCheckboxes();
             applyColumnVisibility();
+            applyColumnWidths();
+            updateSortButtons();
             renderSavedFilters();
             updateFilterBadge();
             syncColoredFormFields();
+            await window.NotelightFeatures?.loadKeuzelijsten?.();
             await fetchData();
-            await fetchSuggestions();
+            await window.NotelightFeatures?.openRecordFromUrl?.();
+        }
+
+        function exposeNotelightCore() {
+            window.NotelightCore = {
+                pb,
+                PB_URL,
+                COLLECTION_NAME,
+                state,
+                loadingOverlay,
+                showToast,
+                confirmAction,
+                fetchPinnedRecords,
+                mergeRecordsWithPins,
+                renderTable,
+                loadRecordForEdit,
+                syncColoredFormFields,
+                escapeAttr,
+                applyColumnVisibility,
+                applyColumnWidths,
+                updateSortButtons,
+                renderSavedFilters,
+                updateFilterBadge,
+            };
         }
 
         // --- Data Fetching & Rendering ---
-        async function fetchData() {
+        async function fetchData(options) {
+            if (window.NotelightFeatures?.fetchDataEnhanced) {
+                return window.NotelightFeatures.fetchDataEnhanced(options);
+            }
+
             if (!pb) {
                 showToast("Fout", "PocketBase niet gevonden. Controleer verbinding.", "error");
                 return;
@@ -1193,38 +1346,25 @@
             loadingOverlay.classList.remove('hidden');
             
             try {
-                // Bouw de filter string voor de API
                 let apiFilter = [];
-                
-                // 1. Zoekbalk filter
                 if (state.searchQuery) {
                     const term = state.searchQuery.replace(/"/g, '\\"');
                     apiFilter.push(`(titel ~ "${term}" || omschrijving ~ "${term}" || soort ~ "${term}" || kenmerk ~ "${term}" || dataset ~ "${term}" || betrokkene ~ "${term}")`);
                 }
-
-                // 2. Actieve opgeslagen filters (alle geselecteerde moeten matchen)
                 state.savedFilters
                     .filter(f => state.activeSavedFilterIds.includes(f.id))
                     .forEach(f => apiFilter.push(`(${f.filter})`));
-
-                // 3. Ad-hoc filter via het formulier
                 if (state.activeFilterStr) {
                     apiFilter.push(`(${state.activeFilterStr})`);
                 }
-
                 const finalFilter = apiFilter.join(' && ');
-
                 const sortPrefix = state.sortDirection === 'desc' ? '-' : '';
                 const listOptions = { sort: `${sortPrefix}${state.sortField}`, requestKey: null };
                 if (finalFilter) listOptions.filter = finalFilter;
-
                 const resultList = await pb.collection(COLLECTION_NAME).getList(1, 50, listOptions);
-                // Alleen vastgepinde records tonen die ook aan de actieve filters voldoen
                 const pinnedRecords = await fetchPinnedRecords(finalFilter);
                 state.records = mergeRecordsWithPins(resultList.items, pinnedRecords);
                 renderTable();
-                mergeDatalistsFromRecords(resultList.items);
-
             } catch (error) {
                 if (error?.isAbort) return;
                 console.error("Fetch error:", error);
@@ -1677,6 +1817,7 @@
                         field: state.sortField,
                         direction: state.sortDirection
                     }));
+                    window.NotelightFeatures?.scheduleVoorkeurenSync?.();
                     updateSortButtons();
                     fetchData();
                 });
@@ -1748,8 +1889,6 @@
                     showToast('Succes', closeAfterSave ? 'Record is gewijzigd' : 'Wijzigingen opgeslagen', 'success');
 
                     await fetchData();
-                    await fetchSuggestions();
-
                     if (closeAfterSave) {
                         cancelEditMode();
                     } else {
@@ -1765,9 +1904,10 @@
                     }
 
                     dataForm.reset();
+                    window.NotelightFeatures?.renderChoiceSelects?.();
+                    resetBijlageState();
                     showToast('Succes', 'Nieuw record opgeslagen', 'success');
                     await fetchData();
-                    await fetchSuggestions();
                 }
             } catch (error) {
                 console.error('Upload error:', error);
@@ -1787,16 +1927,26 @@
         // --- Bewerkingsmodus Logica ---
         function loadRecordForEdit(record) {
             state.editingId = record.id;
+            window.NotelightFeatures?.setRecordUrl?.(record.id);
             
             // Vul formulier velden
             document.getElementById('input-titel').value = record.titel || '';
             setOmschrijvingEditorContent(record.omschrijving || '');
             setOmschrijvingMode('visual');
-            document.getElementById('input-soort').value = record.soort || '';
-            document.getElementById('input-kenmerk').value = record.kenmerk || '';
-            document.getElementById('input-dataset').value = record.dataset || '';
-            document.getElementById('input-betrokkene').value = record.betrokkene || '';
-            document.getElementById('input-status').value = record.status || 'Nieuw';
+            const setChoice = window.NotelightFeatures?.ensureSelectHasValue;
+            if (setChoice) {
+                setChoice(document.getElementById('input-soort'), record.soort || '');
+                setChoice(document.getElementById('input-kenmerk'), record.kenmerk || '');
+                setChoice(document.getElementById('input-dataset'), record.dataset || '');
+                setChoice(document.getElementById('input-betrokkene'), record.betrokkene || '');
+                setChoice(document.getElementById('input-status'), record.status || 'Nieuw');
+            } else {
+                document.getElementById('input-soort').value = record.soort || '';
+                document.getElementById('input-kenmerk').value = record.kenmerk || '';
+                document.getElementById('input-dataset').value = record.dataset || '';
+                document.getElementById('input-betrokkene').value = record.betrokkene || '';
+                document.getElementById('input-status').value = record.status || 'Nieuw';
+            }
             document.getElementById('input-prio').value = normalizePrio(record.prio);
             syncColoredFormFields();
             
@@ -1819,8 +1969,10 @@
 
         function cancelEditMode() {
             state.editingId = null;
+            window.NotelightFeatures?.setRecordUrl?.(null);
             dataForm.reset();
             fileHelpText.classList.add('hidden');
+            window.NotelightFeatures?.renderChoiceSelects?.();
 
             // Pas UI aan naar nieuw modus
             formTitle.innerHTML = `
@@ -1864,7 +2016,6 @@
                 showToast("Verwijderd", "Record is verwijderd.", "success");
                 if (state.editingId === id) cancelEditMode();
                 await fetchData();
-                await fetchSuggestions();
             } catch(e) {
                 showToast("Fout", "Fout bij verwijderen: " + e.message, "error");
             }
@@ -1901,7 +2052,6 @@
                 if(!colsPanel.contains(e.target) && !colsToggle.contains(e.target)) colsPanel.classList.add('hidden');
             });
 
-            document.getElementById('input-dataset').addEventListener('input', syncDatasetInputColor);
             document.getElementById('input-dataset').addEventListener('change', syncDatasetInputColor);
             document.getElementById('input-status').addEventListener('change', syncStatusInputColor);
             document.getElementById('input-prio').addEventListener('change', syncPrioInputColor);
@@ -1967,6 +2117,7 @@
                 const pref = {};
                 state.columns.forEach(c => pref[c.id] = c.visible);
                 localStorage.setItem('pbApp_columns', JSON.stringify(pref));
+                window.NotelightFeatures?.scheduleVoorkeurenSync?.();
                 applyColumnVisibility();
             }
         };
@@ -2049,10 +2200,12 @@
 
         function saveFiltersToLocal() {
             localStorage.setItem('pbApp_savedFilters', JSON.stringify(state.savedFilters));
+            window.NotelightFeatures?.scheduleVoorkeurenSync?.();
         }
 
         function saveActiveSavedFilterIds() {
             localStorage.setItem('pbApp_activeSavedFilterIds', JSON.stringify(state.activeSavedFilterIds));
+            window.NotelightFeatures?.scheduleVoorkeurenSync?.();
         }
 
         function updateFilterBadge() {
@@ -2066,56 +2219,6 @@
         }
 
         // --- Keuzelijsten & Klembord ---
-        async function fetchSuggestions() {
-            if (!pb) return;
-
-            try {
-                const result = await pb.collection(COLLECTION_NAME).getList(1, 500, {
-                    sort: '-created',
-                    requestKey: null
-                });
-                updateDatalists(result.items);
-            } catch (error) {
-                console.warn('Kon suggesties niet ophalen:', error);
-            }
-        }
-
-        function mergeDatalistsFromRecords(records) {
-            SUGGESTION_FIELDS.forEach(field => {
-                const datalist = document.getElementById(`datalist-${field}`);
-                if (!datalist) return;
-
-                const existing = new Set(
-                    Array.from(datalist.options).map(opt => opt.value)
-                );
-                records
-                    .map(r => (r[field] || '').trim())
-                    .filter(Boolean)
-                    .forEach(value => existing.add(value));
-
-                const sorted = [...existing].sort((a, b) => a.localeCompare(b, 'nl'));
-                datalist.innerHTML = sorted
-                    .map(value => `<option value="${escapeAttr(value)}">`)
-                    .join('');
-            });
-        }
-
-        function updateDatalists(records) {
-            SUGGESTION_FIELDS.forEach(field => {
-                const datalist = document.getElementById(`datalist-${field}`);
-                if (!datalist) return;
-
-                const unique = [...new Set(
-                    records
-                        .map(r => (r[field] || '').trim())
-                        .filter(Boolean)
-                )].sort((a, b) => a.localeCompare(b, 'nl'));
-
-                datalist.innerHTML = unique
-                    .map(value => `<option value="${escapeAttr(value)}">`)
-                    .join('');
-            });
-        }
 
         function escapeAttr(str) {
             return String(str)
@@ -2463,6 +2566,7 @@
                         resizer.classList.remove('dragging');
                         document.body.classList.remove('is-resizing');
                         localStorage.setItem('pbApp_columnWidths_v2', JSON.stringify(state.columnWidths));
+                    window.NotelightFeatures?.scheduleVoorkeurenSync?.();
                         document.removeEventListener('mousemove', onMove);
                         document.removeEventListener('mouseup', onUp);
                     };
