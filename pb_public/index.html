@@ -61,6 +61,7 @@
             text-align: center;
             vertical-align: middle;
         }
+        #data-table.select-mode-off .row-select-cell { display: none; }
         .row-select-checkbox {
             width: 1rem;
             height: 1rem;
@@ -70,7 +71,15 @@
         tbody tr.is-selected { background: rgba(37, 99, 235, 0.12); }
         tbody tr.is-selected:hover { background: rgba(37, 99, 235, 0.18); }
         tbody tr.is-selected.is-pinned { background: rgba(37, 99, 235, 0.16); }
-        #btn-bulk-delete.hidden { display: none; }
+        #data-table.select-mode-off tbody tr.is-selected { background: inherit; }
+        #data-table.select-mode-off tbody tr.is-selected:hover { background: rgba(31, 41, 55, 0.5); }
+        #btn-bulk-delete.hidden,
+        #btn-selection-mode.hidden { display: none; }
+        #btn-selection-mode.is-active {
+            color: #93c5fd;
+            border-color: #3b82f6;
+            background: rgba(37, 99, 235, 0.15);
+        }
 
         .field-with-copy { display: flex; gap: 0.5rem; align-items: stretch; }
         .field-with-copy.field-flexible { align-items: flex-start; }
@@ -1075,6 +1084,11 @@
                     <input type="text" id="search-input" placeholder="Zoek in alle velden..." class="w-64 bg-gray-900 border border-gray-700 rounded-full pl-10 pr-4 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all focus:w-80 placeholder-gray-500 shadow-inner">
                 </div>
 
+                <button id="btn-selection-mode" type="button" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2" title="Toon of verberg selectievakjes" aria-pressed="false">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span id="btn-selection-mode-label">Selecteren</span>
+                </button>
+
                 <button id="btn-bulk-delete" type="button" class="hidden bg-red-900/40 hover:bg-red-800/60 border border-red-800 text-red-300 px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-2" title="Verwijder geselecteerde records">
                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
                     Verwijderen (<span id="bulk-delete-count">0</span>)
@@ -1157,7 +1171,7 @@
             </div>
 
             <div class="bg-gray-900 border border-gray-800 rounded-xl shadow-2xl overflow-hidden">
-                <table id="data-table" class="w-full text-left border-collapse text-sm">
+                <table id="data-table" class="w-full text-left border-collapse text-sm select-mode-off">
                     <thead class="bg-gray-850/80 text-gray-400 text-xs uppercase tracking-wider sticky top-0 z-10 backdrop-blur-md">
                         <tr>
                             <th class="row-select-cell font-semibold border-b border-gray-800" title="Selecteer alles">
@@ -1280,6 +1294,7 @@
             activeSavedFilterIds: JSON.parse(localStorage.getItem('pbApp_activeSavedFilterIds') || '[]'),
             pinnedRecordIds: JSON.parse(localStorage.getItem('pbApp_pinnedRecordIds') || '[]'),
             selectedRecordIds: [],
+            selectionMode: false,
             editingId: null, // Toegevoegd voor bewerkingsmodus
             sortField: 'created',
             sortDirection: 'desc',
@@ -1602,8 +1617,26 @@
             const bulkBtn = document.getElementById('btn-bulk-delete');
             const countEl = document.getElementById('bulk-delete-count');
             const selectAll = document.getElementById('select-all-records');
+            const modeBtn = document.getElementById('btn-selection-mode');
+            const modeLabel = document.getElementById('btn-selection-mode-label');
+            const table = document.getElementById('data-table');
+
+            if (table) table.classList.toggle('select-mode-off', !state.selectionMode);
+            if (modeBtn) {
+                modeBtn.classList.toggle('is-active', state.selectionMode);
+                modeBtn.setAttribute('aria-pressed', state.selectionMode ? 'true' : 'false');
+                modeBtn.title = state.selectionMode
+                    ? 'Verberg selectievakjes'
+                    : 'Toon selectievakjes';
+            }
+            if (modeLabel) {
+                modeLabel.textContent = state.selectionMode ? 'Selectie uit' : 'Selecteren';
+            }
+
             if (countEl) countEl.textContent = String(count);
-            if (bulkBtn) bulkBtn.classList.toggle('hidden', count === 0);
+            if (bulkBtn) {
+                bulkBtn.classList.toggle('hidden', !state.selectionMode || count === 0);
+            }
 
             if (selectAll) {
                 const visibleCount = state.records.length;
@@ -1612,11 +1645,24 @@
                 ).length;
                 selectAll.checked = visibleCount > 0 && selectedVisible === visibleCount;
                 selectAll.indeterminate = selectedVisible > 0 && selectedVisible < visibleCount;
-                selectAll.disabled = visibleCount === 0;
+                selectAll.disabled = !state.selectionMode || visibleCount === 0;
             }
         }
 
+        function setSelectionMode(enabled) {
+            state.selectionMode = Boolean(enabled);
+            if (!state.selectionMode) {
+                state.selectedRecordIds = [];
+            }
+            renderTable();
+        }
+
+        function toggleSelectionMode() {
+            setSelectionMode(!state.selectionMode);
+        }
+
         function setRecordSelected(id, selected) {
+            if (!state.selectionMode) return;
             if (selected) {
                 if (!state.selectedRecordIds.includes(id)) {
                     state.selectedRecordIds.push(id);
@@ -1627,6 +1673,7 @@
         }
 
         function toggleSelectAllRecords(checked) {
+            if (!state.selectionMode) return;
             if (checked) {
                 const ids = new Set(state.selectedRecordIds);
                 state.records.forEach((record) => ids.add(record.id));
@@ -1640,6 +1687,7 @@
 
         window.toggleRecordSelection = (id, event) => {
             event.stopPropagation();
+            if (!state.selectionMode) return;
             const checked = event.target?.checked;
             setRecordSelected(id, Boolean(checked));
             const row = event.target?.closest('tr');
@@ -2523,6 +2571,9 @@
             document.getElementById('select-all-records')?.addEventListener('change', (e) => {
                 e.stopPropagation();
                 toggleSelectAllRecords(e.target.checked);
+            });
+            document.getElementById('btn-selection-mode')?.addEventListener('click', () => {
+                toggleSelectionMode();
             });
             document.getElementById('btn-bulk-delete')?.addEventListener('click', () => {
                 deleteSelectedRecords();
