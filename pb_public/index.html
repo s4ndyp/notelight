@@ -81,6 +81,29 @@
             background: rgba(37, 99, 235, 0.15);
         }
 
+        #mobile-hint {
+            display: none;
+            position: fixed;
+            left: 0.75rem;
+            right: 0.75rem;
+            bottom: 0.75rem;
+            z-index: 70;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.75rem;
+            padding: 0.7rem 0.85rem;
+            background: #1e3a8a;
+            border: 1px solid #3b82f6;
+            border-radius: 0.75rem;
+            color: #dbeafe;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+        }
+        #mobile-hint a { color: #fff; font-weight: 600; text-decoration: underline; }
+        #mobile-hint.is-dismissed { display: none !important; }
+        @media (max-width: 768px) {
+            #mobile-hint:not(.is-dismissed) { display: flex; }
+        }
+
         .field-with-copy { display: flex; gap: 0.5rem; align-items: stretch; }
         .field-with-copy.field-flexible { align-items: flex-start; }
         .field-with-copy.field-flexible > input,
@@ -866,6 +889,10 @@
 
     <!-- Notificatie Container -->
     <div id="toast-container" class="fixed top-4 right-4 z-50 flex flex-col gap-2 pointer-events-none"></div>
+    <div id="mobile-hint" role="status">
+        <p class="text-sm">Op een telefoon is de <a href="/mobile.html">mobiele weergave</a> overzichtelijker.</p>
+        <button type="button" id="mobile-hint-dismiss" class="text-blue-100 px-2 text-lg leading-none" title="Sluiten" aria-label="Hint sluiten">&times;</button>
+    </div>
 
     <!-- LINKER KOLOM: Invoer & Wijzigen -->
     <aside id="sidebar" class="relative bg-gray-900 border-r border-gray-800 flex flex-col h-full z-10 shadow-xl">
@@ -883,6 +910,10 @@
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h10M4 18h14"></path></svg>
                 Keuzelijsten
             </button>
+            <a href="/mobile.html" class="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-400 transition-colors" title="Open de mobiele weergave">
+                <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                Mobiel
+            </a>
         </div>
         <div class="p-6 border-b border-gray-800 transition-colors duration-300" id="form-header-bg">
             <div class="form-header-top">
@@ -3215,6 +3246,14 @@
                 toast.classList.add('translate-x-full', 'opacity-0');
                 setTimeout(() => toast.remove(), 300);
             }, 4000);
+        }
+
+        document.getElementById('mobile-hint-dismiss')?.addEventListener('click', () => {
+            document.getElementById('mobile-hint')?.classList.add('is-dismissed');
+            sessionStorage.setItem('pbApp_hideMobileHint', '1');
+        });
+        if (sessionStorage.getItem('pbApp_hideMobileHint') === '1') {
+            document.getElementById('mobile-hint')?.classList.add('is-dismissed');
         }
 
         // Start app

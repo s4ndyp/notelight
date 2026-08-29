@@ -90,3 +90,4 @@ Zonder deze collectie blijven voorkeuren in `localStorage` van de browser.
 - **Keuzelijsten**: zie hierboven (incl. kleuren voor Dataset/Soort).
 - **Bijlagen galerij**: modal in de hoofdapp (zelfde patroon als Keuzelijsten).
 - **Voorkeuren sync**: zie hierboven.
+- **Mobiele weergave**: aparte pagina op `/mobile.html` (kaartenlijst, statusfilters, zoeken, nieuw/bewerken/verwijderen, foto/bestand als bijlage). Desktop blijft in `index.html`. Open via de link **Mobiel** of de hint op een smal scherm.
