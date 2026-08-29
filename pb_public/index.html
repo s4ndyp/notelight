@@ -2240,7 +2240,7 @@
                     }
 
                     dataForm.reset();
-                    window.NotelightFeatures?.renderChoiceSelects?.();
+                    applyNewEntryDefaults();
                     resetBijlageState();
                     showToast('Succes', 'Nieuw record opgeslagen', 'success');
                     await fetchData();
@@ -2303,12 +2303,19 @@
             renderTable(); // Update selectie styling in tabel
         }
 
+        function applyNewEntryDefaults() {
+            window.NotelightFeatures?.renderChoiceSelects?.();
+            const statusSelect = document.getElementById('input-status');
+            if (statusSelect) statusSelect.value = 'Nieuw';
+            syncColoredFormFields();
+        }
+
         function cancelEditMode() {
             state.editingId = null;
             window.NotelightFeatures?.setRecordUrl?.(null);
             dataForm.reset();
             fileHelpText.classList.add('hidden');
-            window.NotelightFeatures?.renderChoiceSelects?.();
+            applyNewEntryDefaults();
 
             // Pas UI aan naar nieuw modus
             formTitle.innerHTML = `
@@ -2322,7 +2329,6 @@
             btnRowNew.classList.remove('hidden');
 
             renderTable(); // Verwijder selectie styling uit tabel
-            syncColoredFormFields();
         }
 
         window.togglePinRecord = (id, event) => {
