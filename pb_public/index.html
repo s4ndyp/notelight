@@ -1410,9 +1410,15 @@
             return getKeuzeColorHex('dataset', dataset) || getDefaultDatasetHex(dataset);
         }
 
+        function getDefaultSoortHex(soort) {
+            if (!soort?.trim()) return null;
+            // Zelfde palet als dataset / keuzelijst-opties
+            return DATASET_HEX_COLORS[hashString(soort) % DATASET_HEX_COLORS.length];
+        }
+
         function getSoortColorHex(soort) {
             if (!soort?.trim()) return null;
-            return getKeuzeColorHex('soort', soort);
+            return getKeuzeColorHex('soort', soort) || getDefaultSoortHex(soort);
         }
 
         function getDatasetColorClass(dataset) {
@@ -1502,8 +1508,8 @@
             const input = document.getElementById('input-soort');
             if (!input) return;
             const value = input.value.trim();
-            const customHex = value ? getSoortColorHex(value) : null;
-            setFormFieldColor(input, customHex ? null : 'text-white', customHex);
+            const hex = value ? getSoortColorHex(value) : null;
+            setFormFieldColor(input, value ? null : 'text-white', hex);
         }
 
         function syncStatusInputColor() {
@@ -1546,11 +1552,8 @@
             }
             const div = document.createElement('div');
             div.innerText = soort;
-            const customHex = getSoortColorHex(soort);
-            if (customHex) {
-                return `<span class="pointer-events-none" style="color:${escapeAttr(customHex)}">${div.innerHTML}</span>`;
-            }
-            return `<span class="pointer-events-none text-gray-400">${div.innerHTML}</span>`;
+            const hex = getSoortColorHex(soort);
+            return `<span class="font-medium pointer-events-none" style="color:${escapeAttr(hex)}">${div.innerHTML}</span>`;
         }
 
         function savePinnedRecordIds() {
