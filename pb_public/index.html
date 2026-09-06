@@ -2103,7 +2103,17 @@
                 })
                 .filter(Boolean);
 
-            return details.length ? `${base} (${details.join('; ')})` : base;
+            if (!details.length) return base;
+
+            const joined = details.join('; ');
+            const choiceFields = ['status', 'soort', 'kenmerk', 'dataset', 'betrokkene'];
+            const rejectedChoice = choiceFields.find((field) =>
+                Object.prototype.hasOwnProperty.call(fieldErrors, field)
+            );
+            if (rejectedChoice) {
+                return `${base} (${joined}). Tip: controleer in PocketBase Admin of '${rejectedChoice}' type 'text' is (niet 'select' met een vaste lijst).`;
+            }
+            return `${base} (${joined})`;
         }
 
         function setupBijlageUpload() {

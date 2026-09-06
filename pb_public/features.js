@@ -551,7 +551,9 @@
                 c.state.keuzelijsten.byCategorie[cat].push(item);
             });
 
-            if (seedFromRecords) {
+            // Alleen bij eerste setup (lege collectie) automatisch vullen — niet bij elke refresh,
+            // anders komen verwijderde keuzes terug zodra ze nog op een record staan.
+            if (seedFromRecords && c.state.keuzelijsten.items.length === 0) {
                 await seedMissingChoicesFromRecords();
             }
 
@@ -844,7 +846,7 @@
             return;
         }
 
-        body.innerHTML = CHOICE_CATEGORIES.map(({ id, label }) => {
+        const categoryBlocks = CHOICE_CATEGORIES.map(({ id, label }) => {
             const items = getChoicesFor(id);
             const showColor = COLORABLE_CATEGORIES.has(id);
             const list =
@@ -877,6 +879,27 @@
                     ${list}
                 </section>`;
         }).join('');
+
+        body.innerHTML = `
+            ${categoryBlocks}
+            <div class="mt-4 pt-4 border-t border-gray-800 space-y-1">
+                <button type="button" id="btn-keuze-sync-records" class="text-xs text-gray-400 hover:text-blue-400 transition-colors">
+                    Synchroniseer ontbrekende waarden uit records
+                </button>
+                <p class="text-xs text-gray-600">Voegt waarden toe die nog op bestaande registraties staan maar niet in de keuzelijst. Verwijderde keuzes komen niet automatisch terug bij een pagina-refresh.</p>
+            </div>`;
+    }
+
+    async function syncChoicesFromRecords() {
+        const c = core();
+        if (!c.state.keuzelijsten.available) {
+            c.showToast('Niet beschikbaar', `Collectie '${KEUZE_COLLECTION}' ontbreekt.`, 'error');
+            return;
+        }
+        await seedMissingChoicesFromRecords();
+        renderChoiceSelects();
+        renderKeuzelijstenModal();
+        c.showToast('Gesynchroniseerd', 'Ontbrekende waarden uit records zijn toegevoegd.', 'success');
     }
 
     function openKeuzelijstenModal() {
@@ -1275,6 +1298,10 @@
             if (e.target.id === 'keuzelijsten-modal') closeKeuzelijstenModal();
         });
         document.getElementById('keuzelijsten-body')?.addEventListener('click', (e) => {
+            if (e.target.closest('#btn-keuze-sync-records')) {
+                syncChoicesFromRecords();
+                return;
+            }
             const addBtn = e.target.closest('[data-add-keuze]');
             if (addBtn) {
                 promptAddKeuze(addBtn.dataset.addKeuze);

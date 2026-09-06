@@ -71,6 +71,18 @@ In de UI:
 
 Zonder deze collectie blijft de app werken met ingebouwde statussen; andere dropdowns blijven dan leeg tot de collectie bestaat.
 
+Bij **eerste load** (lege `keuzelijsten`-collectie) vult de app automatisch standaardstatussen en waarden uit bestaande registraties. Na die eerste keer komen verwijderde keuzes **niet** automatisch terug bij een pagina-refresh. Gebruik in het Keuzelijsten-scherm **Synchroniseer ontbrekende waarden uit records** als je bewust waarden uit oude records wilt importeren.
+
+### Problemen met opslaan (bijv. Status = "Ter info")
+
+De dropdowns komen uit `keuzelijsten`, maar PocketBase valideert nog steeds het **schema** van `registraties`:
+
+| Symptoom | Waarschijnlijke oorzaak | Oplossing |
+|----------|-------------------------|-----------|
+| Status "Ter info" kan niet opslaan, andere statussen wel | `status` staat in PocketBase nog als **select** met een oude vaste lijst zonder "Ter info" | Zet `status` (en bij voorkeur ook `soort`, `kenmerk`, `dataset`, `betrokkene`) op type **text** in PocketBase Admin |
+| Eén keuze-waarde kan niet opslaan, andere wel (ander veld) | Dat veld staat nog als **select** met oude waarden | Zelfde: veldtype wijzigen naar **text** |
+| Verwijderde keuze komt terug na refresh | Waarde staat nog op registraties, of je hebt handmatig gesynchroniseerd; standaardstatussen (o.a. "Ter info") worden bij eerste setup altijd aangemaakt | Pas records aan of gebruik de sync-knop niet; auto-seed draait alleen bij een lege `keuzelijsten`-collectie |
+
 ### 3. `voorkeuren` (nieuw — optie 9)
 
 Deelt filters, pins, kolommen, breedtes en sortering over browsers/apparaten (team-breed, sleutel `team`).
