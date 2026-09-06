@@ -1187,19 +1187,26 @@
 
     async function refreshStorageStats() {
         const el = document.getElementById('storage-stats');
-        if (!el) return;
+        const label = document.getElementById('storage-stats-label');
+        if (!el || !label) return;
 
-        const c = core();
-        const base = (c?.PB_URL || window.location.origin).replace(/\/$/, '');
+        const base = (core()?.PB_URL || window.location.origin).replace(/\/$/, '');
 
         try {
             const res = await fetch(`${base}/api/storage-stats`, { cache: 'no-store' });
-            if (!res.ok) throw new Error('unavailable');
-            const data = await res.json();
-            if (!data?.available) throw new Error('unavailable');
+            const data = await res.json().catch(() => null);
+            if (!res.ok || !data?.available) {
+                throw new Error(data?.error || `HTTP ${res.status}`);
+            }
             renderStorageStats(data);
-        } catch (_) {
-            el.classList.add('hidden');
+        } catch (error) {
+            console.warn('Opslag-indicator niet beschikbaar:', error?.message || error);
+            label.textContent = 'Opslag ?';
+            el.title =
+                'Kon opslag niet ophalen. Open /api/storage-stats in de browser om te testen, ' +
+                'en controleer of de container de pb_hooks bevat (image opnieuw pullen).';
+            el.classList.remove('hidden', 'text-yellow-500', 'text-red-400');
+            el.classList.add('text-gray-600');
         }
     }
 

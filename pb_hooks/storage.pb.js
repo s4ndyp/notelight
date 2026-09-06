@@ -2,6 +2,15 @@
 
 routerAdd('GET', '/api/storage-stats', function (e) {
     var dataDir = $app.dataDir();
+
+    try {
+        if (dataDir.indexOf('/') !== 0) {
+            dataDir = $filepath.join($os.getwd(), dataDir);
+        }
+    } catch (pathErr) {
+        // relative pad behouden als getwd niet beschikbaar is
+    }
+
     var result = {
         available: true,
         dataDir: dataDir,
@@ -12,42 +21,82 @@ routerAdd('GET', '/api/storage-stats', function (e) {
         appDataBytes: 0,
     };
 
-    try {
-        var dfCmd = $os.cmd('df', '-B1', dataDir);
-        var dfRaw = toString(dfCmd.output());
-        var dfLines = dfRaw.trim().split('\n');
-        if (dfLines.length >= 2) {
-            var parts = dfLines[1].trim().split(/\s+/);
-            if (parts.length >= 5) {
-                result.totalBytes = parseInt(parts[1], 10) || 0;
-                result.usedBytes = parseInt(parts[2], 10) || 0;
-                result.freeBytes = parseInt(parts[3], 10) || 0;
-                result.usedPercent = parseInt(String(parts[4]).replace('%', ''), 10) || 0;
+    var dfAttempts = [
+        { args: ['df', '-B1', dataDir], blockSize: 1 },
+        { args: ['df', '-Pk', dataDir], blockSize: 1024 },
+        { args: ['df', '-kP', dataDir], blockSize: 1024 },
+        { args: ['df', '-k', dataDir], blockSize: 1024 },
+        { args: ['df', dataDir], blockSize: 1024 },
+    ];
+
+    var dfParsed = null;
+    for (var i = 0; i < dfAttempts.length; i++) {
+        var attempt = dfAttempts[i];
+        try {
+            var dfCmd = $os.cmd(attempt.args[0], attempt.args[1], attempt.args[2]);
+            var dfRaw = toString(dfCmd.output());
+            var dfLines = String(dfRaw || '').trim().split('\n');
+            for (var li = 1; li < dfLines.length; li++) {
+                var parts = dfLines[li].trim().split(/\s+/);
+                if (parts.length < 5) continue;
+
+                var fsName = parts[0];
+                if (fsName === 'tmpfs' || fsName === 'devtmpfs' || fsName === 'proc' || fsName === 'sysfs') {
+                    continue;
+                }
+
+                var total = parseInt(parts[1], 10);
+                var used = parseInt(parts[2], 10);
+                var avail = parseInt(parts[3], 10);
+                var pcent = parseInt(String(parts[4]).replace('%', ''), 10);
+                if (!total || isNaN(total)) continue;
+
+                dfParsed = {
+                    totalBytes: total * attempt.blockSize,
+                    usedBytes: used * attempt.blockSize,
+                    freeBytes: avail * attempt.blockSize,
+                    usedPercent: isNaN(pcent) ? Math.round((used / total) * 100) : pcent,
+                };
+                break;
             }
+            if (dfParsed) break;
+        } catch (dfErr) {
+            // volgende df-variant proberen
         }
-    } catch (err) {
+    }
+
+    if (!dfParsed) {
         return e.json(503, {
             available: false,
-            error: 'Opslag meten mislukt',
+            error: 'Opslag meten mislukt (df)',
+            dataDir: dataDir,
         });
     }
 
-    if (!result.totalBytes) {
-        return e.json(503, {
-            available: false,
-            error: 'Opslag meten mislukt',
-        });
-    }
+    result.totalBytes = dfParsed.totalBytes;
+    result.usedBytes = dfParsed.usedBytes;
+    result.freeBytes = dfParsed.freeBytes;
+    result.usedPercent = dfParsed.usedPercent;
 
-    try {
-        var duCmd = $os.cmd('du', '-sb', dataDir);
-        var duRaw = toString(duCmd.output()).trim();
-        var duParts = duRaw.split(/\s+/);
-        if (duParts.length >= 1) {
-            result.appDataBytes = parseInt(duParts[0], 10) || 0;
+    var duAttempts = [
+        { args: ['du', '-sb', dataDir], multiplier: 1 },
+        { args: ['du', '-sk', dataDir], multiplier: 1024 },
+        { args: ['du', '-s', dataDir], multiplier: 1024 },
+    ];
+
+    for (var di = 0; di < duAttempts.length; di++) {
+        var duAttempt = duAttempts[di];
+        try {
+            var duCmd = $os.cmd(duAttempt.args[0], duAttempt.args[1], duAttempt.args[2]);
+            var duRaw = toString(duCmd.output()).trim();
+            var duNum = parseInt(duRaw.split(/\s+/)[0], 10);
+            if (duNum && !isNaN(duNum)) {
+                result.appDataBytes = duNum * duAttempt.multiplier;
+                break;
+            }
+        } catch (duErr) {
+            // optioneel
         }
-    } catch (err) {
-        // du is optioneel; df-resultaat is voldoende voor de indicator
     }
 
     return e.json(200, result);

@@ -5,6 +5,7 @@ ARG PB_VERSION=0.40.1
 
 RUN apk add --no-cache \
     ca-certificates \
+    coreutils \
     unzip \
     wget \
     zip

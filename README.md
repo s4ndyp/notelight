@@ -102,5 +102,5 @@ Zonder deze collectie blijven voorkeuren in `localStorage` van de browser.
 - **Keuzelijsten**: zie hierboven (incl. kleuren voor Dataset/Soort).
 - **Bijlagen galerij**: modal in de hoofdapp (zelfde patroon als Keuzelijsten).
 - **Voorkeuren sync**: zie hierboven.
-- **Opslag-indicator**: in de desktop-balk naast **Mobiel** zie je hoeveel vrije ruimte er nog is op het `pb_data`-volume (via PocketBase hook `/api/storage-stats`). Na deploy moet de Docker-image opnieuw gebouwd worden (`pb_hooks/`).
+- **Opslag-indicator**: in de desktop-balk naast **Mobiel** zie je hoeveel vrije ruimte er nog is op het `pb_data`-volume (via PocketBase hook `/api/storage-stats`). Na deploy: image opnieuw **pullen** (`docker compose pull && docker compose up -d`), niet alleen herstarten. Test handmatig via `http://<host>:8084/api/storage-stats` — je moet JSON met `"available": true` zien. Toont de indicator **Opslag ?**, dan faalt die API (meestal oude image zonder `pb_hooks`, of BusyBox-`df` in Alpine — de image installeert `coreutils` als fallback).
 - **Mobiele weergave**: aparte pagina op `/mobile.html`. Op telefoons stuurt `/` automatisch door naar de mobiele weergave (query zoals `?id=` blijft behouden). Kies **Desktop** op mobiel of open `/?desktop=1` om de desktop-UI te blijven gebruiken.
