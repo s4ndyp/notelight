@@ -2103,7 +2103,14 @@
                 })
                 .filter(Boolean);
 
-            return details.length ? `${base} (${details.join('; ')})` : base;
+            if (!details.length) return base;
+
+            const joined = details.join('; ');
+            const soortRejected = Object.prototype.hasOwnProperty.call(fieldErrors, 'soort');
+            if (soortRejected) {
+                return `${base} (${joined}). Tip: controleer in PocketBase Admin of het veld 'soort' type 'text' is (niet 'select' met een vaste lijst).`;
+            }
+            return `${base} (${joined})`;
         }
 
         function setupBijlageUpload() {
