@@ -2106,9 +2106,12 @@
             if (!details.length) return base;
 
             const joined = details.join('; ');
-            const soortRejected = Object.prototype.hasOwnProperty.call(fieldErrors, 'soort');
-            if (soortRejected) {
-                return `${base} (${joined}). Tip: controleer in PocketBase Admin of het veld 'soort' type 'text' is (niet 'select' met een vaste lijst).`;
+            const choiceFields = ['status', 'soort', 'kenmerk', 'dataset', 'betrokkene'];
+            const rejectedChoice = choiceFields.find((field) =>
+                Object.prototype.hasOwnProperty.call(fieldErrors, field)
+            );
+            if (rejectedChoice) {
+                return `${base} (${joined}). Tip: controleer in PocketBase Admin of '${rejectedChoice}' type 'text' is (niet 'select' met een vaste lijst).`;
             }
             return `${base} (${joined})`;
         }
