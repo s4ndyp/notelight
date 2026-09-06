@@ -896,7 +896,7 @@
     <!-- LINKER KOLOM: Invoer & Wijzigen -->
     <aside id="sidebar" class="relative bg-gray-900 border-r border-gray-800 flex flex-col h-full z-10 shadow-xl">
         <div id="sidebar-resizer" class="sidebar-resizer" title="Sleep om breedte aan te passen"></div>
-        <div class="px-6 py-2.5 border-b border-gray-800 bg-gray-950/60 flex items-center gap-4">
+        <div class="px-6 py-2.5 border-b border-gray-800 bg-gray-950/60 flex items-center gap-4 flex-wrap">
             <a id="pb-admin-link" href="#" target="_blank" rel="noopener noreferrer" class="inline-flex items-center gap-1.5 text-xs text-gray-500 hover:text-blue-400 transition-colors" title="Open PocketBase beheer">
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"></path></svg>
                 PocketBase Admin
@@ -913,6 +913,10 @@
                 <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
                 Mobiel
             </a>
+            <span id="storage-stats" class="hidden inline-flex items-center gap-1.5 text-xs text-gray-500" title="Vrije opslag op het data-volume">
+                <svg class="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4"></path></svg>
+                <span id="storage-stats-label">—</span>
+            </span>
         </div>
         <div class="p-6 border-b border-gray-800 transition-colors duration-300" id="form-header-bg">
             <div class="form-header-top">
@@ -1776,6 +1780,7 @@
             updateFilterBadge();
             syncColoredFormFields();
             await window.NotelightFeatures?.loadKeuzelijsten?.();
+            window.NotelightFeatures?.initStorageStats?.();
             await fetchData();
             await window.NotelightFeatures?.openRecordFromUrl?.();
         }

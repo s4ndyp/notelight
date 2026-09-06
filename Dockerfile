@@ -15,6 +15,7 @@ RUN unzip /tmp/pb.zip -d /pb/ \
     && chmod +x /pb/pocketbase
 
 COPY ./pb_public /pb/pb_public
+COPY ./pb_hooks /pb/pb_hooks
 
 # Persist database + uploaded files outside the container layer.
 WORKDIR /pb

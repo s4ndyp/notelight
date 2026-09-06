@@ -1139,6 +1139,76 @@
         closeKeuzelijstenModal();
     }
 
+    const STORAGE_STATS_INTERVAL_MS = 5 * 60 * 1000;
+    let storageStatsTimer = null;
+
+    function formatStorageBytes(bytes) {
+        if (!bytes || bytes < 0) return '0 B';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let value = bytes;
+        let unitIndex = 0;
+        while (value >= 1024 && unitIndex < units.length - 1) {
+            value /= 1024;
+            unitIndex += 1;
+        }
+        const decimals = unitIndex >= 2 ? 1 : 0;
+        return `${value.toFixed(decimals)} ${units[unitIndex]}`;
+    }
+
+    function renderStorageStats(data) {
+        const el = document.getElementById('storage-stats');
+        const label = document.getElementById('storage-stats-label');
+        if (!el || !label || !data?.available) return;
+
+        const freeLabel = formatStorageBytes(data.freeBytes);
+        const totalLabel = formatStorageBytes(data.totalBytes);
+        const usedPercent = Number(data.usedPercent) || 0;
+        const freeRatio = data.totalBytes ? data.freeBytes / data.totalBytes : 1;
+
+        label.textContent = `${freeLabel} vrij`;
+        el.classList.remove('hidden', 'text-yellow-500', 'text-red-400', 'text-gray-500');
+        if (usedPercent >= 90 || freeRatio < 0.1) {
+            el.classList.add('text-red-400');
+        } else if (usedPercent >= 80 || freeRatio < 0.2) {
+            el.classList.add('text-yellow-500');
+        } else {
+            el.classList.add('text-gray-500');
+        }
+
+        const tooltipParts = [
+            `Vrije ruimte op data-volume: ${freeLabel} van ${totalLabel}`,
+            `Volume ${usedPercent}% in gebruik`,
+        ];
+        if (data.appDataBytes) {
+            tooltipParts.push(`Notelight-data (pb_data): ${formatStorageBytes(data.appDataBytes)}`);
+        }
+        el.title = tooltipParts.join('\n');
+    }
+
+    async function refreshStorageStats() {
+        const el = document.getElementById('storage-stats');
+        if (!el) return;
+
+        const c = core();
+        const base = (c?.PB_URL || window.location.origin).replace(/\/$/, '');
+
+        try {
+            const res = await fetch(`${base}/api/storage-stats`, { cache: 'no-store' });
+            if (!res.ok) throw new Error('unavailable');
+            const data = await res.json();
+            if (!data?.available) throw new Error('unavailable');
+            renderStorageStats(data);
+        } catch (_) {
+            el.classList.add('hidden');
+        }
+    }
+
+    function initStorageStats() {
+        if (storageStatsTimer) clearInterval(storageStatsTimer);
+        refreshStorageStats();
+        storageStatsTimer = setInterval(refreshStorageStats, STORAGE_STATS_INTERVAL_MS);
+    }
+
     function collectPrefsPayload(state) {
         const columns = {};
         state.columns.forEach((col) => {
@@ -1380,6 +1450,8 @@
         scheduleVoorkeurenSync,
         updateLoadMoreUi,
         wireUi,
+        initStorageStats,
+        refreshStorageStats,
         CHOICE_CATEGORIES,
     };
 })();
