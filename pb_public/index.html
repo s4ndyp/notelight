@@ -513,6 +513,13 @@
             color: #22c55e;
             font-weight: 700;
         }
+        .oms-visual-link {
+            color: #60a5fa;
+            text-decoration: underline;
+            text-underline-offset: 2px;
+            word-break: break-word;
+        }
+        .oms-visual-link:hover { color: #93c5fd; }
         .btn-field-tool.active { color: #60a5fa; border-color: #3b82f6; background: rgba(37, 99, 235, 0.12); }
 
         #data-table { table-layout: auto; width: 100%; }
@@ -1071,6 +1078,9 @@
                             <button type="button" class="btn-field-tool" id="btn-omschrijving-check" title="Afvinkvakje toevoegen">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                             </button>
+                            <button type="button" class="btn-field-tool" id="btn-omschrijving-link" title="Hyperlink toevoegen">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"></path></svg>
+                            </button>
                             <button type="button" class="btn-field-tool" id="btn-omschrijving-mode" title="Visuele weergave">&lt;&gt;</button>
                         </div>
                     </div>
@@ -1300,6 +1310,34 @@
                 </div>
                 <div id="gallery-grid" class="gallery-modal-grid hidden"></div>
             </div>
+        </div>
+    </div>
+
+    <div id="oms-link-modal" class="modal-backdrop hidden" role="dialog" aria-modal="true" aria-labelledby="oms-link-title">
+        <div class="modal-panel" style="width:min(28rem,100%);max-height:none;">
+            <div class="flex items-center justify-between gap-3 px-5 py-4 border-b border-gray-800">
+                <div>
+                    <h2 id="oms-link-title" class="text-lg font-semibold text-white">Hyperlink toevoegen</h2>
+                    <p class="text-xs text-gray-500 mt-0.5">Wordt opgeslagen als <span class="font-mono text-gray-400">[tekst](url)</span>.</p>
+                </div>
+                <button type="button" id="oms-link-close" class="text-gray-500 hover:text-white transition-colors p-1" title="Sluiten">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <form id="oms-link-form" class="p-5 space-y-3">
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1" for="oms-link-label">Weergavetekst</label>
+                    <input id="oms-link-label" type="text" autocomplete="off" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="Korte tekst, bijv. Handleiding">
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-300 mb-1" for="oms-link-url">URL</label>
+                    <input id="oms-link-url" type="text" inputmode="url" required autocomplete="off" class="w-full bg-gray-900 border border-gray-700 rounded-lg px-3 py-2 text-sm text-white focus:outline-none focus:ring-2 focus:ring-blue-500" placeholder="https://voorbeeld.nl">
+                </div>
+                <div class="flex gap-2 pt-1">
+                    <button type="button" id="oms-link-cancel" class="flex-1 bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-200 text-sm py-2 rounded-lg">Annuleren</button>
+                    <button type="submit" class="flex-1 bg-blue-600 hover:bg-blue-700 text-white text-sm py-2 rounded-lg">Invoegen</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -2274,7 +2312,7 @@
                     <td data-col="dataset" class="border-b border-gray-800 truncate" title="${record.dataset || ''}">${renderDatasetHTML(record.dataset)}</td>
                     <td data-col="titel" class="border-b border-gray-800 truncate text-gray-200 font-semibold" title="${record.titel || ''}">${safeHTML(record.titel)}</td>
                     <td data-col="soort" class="border-b border-gray-800 truncate" title="${record.soort || ''}">${renderSoortHTML(record.soort)}</td>
-                    <td data-col="omschrijving" class="border-b border-gray-800 truncate text-gray-300 font-medium" title="${record.omschrijving || ''}">${safeHTML(record.omschrijving)}</td>
+                    <td data-col="omschrijving" class="border-b border-gray-800 truncate text-gray-300 font-medium" title="${escapeAttr(previewOmschrijvingPlain(record.omschrijving))}">${safeHTML(previewOmschrijvingPlain(record.omschrijving))}</td>
                     <td data-col="kenmerk" class="border-b border-gray-800 truncate text-gray-400" title="${record.kenmerk || ''}">${safeHTML(record.kenmerk)}</td>
                     <td data-col="betrokkene" class="border-b border-gray-800 truncate text-gray-400" title="${record.betrokkene || ''}">${safeHTML(record.betrokkene)}</td>
                     <td data-col="status" class="border-b border-gray-800">${statusBadge}</td>
@@ -2863,6 +2901,82 @@
                 .replace(/"/g, '&quot;');
         }
 
+        function sanitizeOmsUrl(raw) {
+            let trimmed = String(raw || '').trim();
+            if (!trimmed) return '';
+            if (/^www\./i.test(trimmed)) {
+                trimmed = 'https://' + trimmed;
+            } else if (!/^[a-z][a-z0-9+.-]*:/i.test(trimmed) && /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}([/:?#].*)?$/i.test(trimmed)) {
+                trimmed = 'https://' + trimmed;
+            }
+            try {
+                const parsed = new URL(trimmed);
+                if (!['http:', 'https:', 'mailto:'].includes(parsed.protocol)) return '';
+                return parsed.href;
+            } catch {
+                return '';
+            }
+        }
+
+        function looksLikeOmsUrl(text) {
+            const value = String(text || '').trim();
+            return /^(https?:\/\/|mailto:|www\.)/i.test(value)
+                || /^[a-z0-9][a-z0-9.-]*\.[a-z]{2,}([/:?#].*)?$/i.test(value);
+        }
+
+        function renderOmsLinkHtml(href, label) {
+            return `<a href="${escapeOmsHtml(href)}" class="oms-visual-link" target="_blank" rel="noopener noreferrer">${escapeOmsHtml(label)}</a>`;
+        }
+
+        function renderInlineMarkup(text) {
+            const source = String(text ?? '');
+            if (!source) return '';
+
+            const parts = [];
+            const re = /\[([^\]]+)\]\(([^)\s]+)\)|(https?:\/\/[^\s<]+)/gi;
+            let lastIndex = 0;
+            let match;
+
+            while ((match = re.exec(source)) !== null) {
+                if (match.index > lastIndex) {
+                    parts.push(escapeOmsHtml(source.slice(lastIndex, match.index)));
+                }
+
+                if (match[1] != null) {
+                    const href = sanitizeOmsUrl(match[2]);
+                    const label = match[1].trim() || match[2];
+                    parts.push(href ? renderOmsLinkHtml(href, label) : escapeOmsHtml(match[0]));
+                    lastIndex = match.index + match[0].length;
+                    continue;
+                }
+
+                let rawUrl = match[3];
+                let trailing = '';
+                const punct = rawUrl.match(/[),.;:!?]+$/);
+                if (punct) {
+                    trailing = punct[0];
+                    rawUrl = rawUrl.slice(0, -trailing.length);
+                }
+                const href = sanitizeOmsUrl(rawUrl);
+                if (href) {
+                    parts.push(renderOmsLinkHtml(href, rawUrl));
+                    parts.push(escapeOmsHtml(trailing));
+                } else {
+                    parts.push(escapeOmsHtml(match[0]));
+                }
+                lastIndex = match.index + match[0].length;
+            }
+
+            if (lastIndex < source.length) {
+                parts.push(escapeOmsHtml(source.slice(lastIndex)));
+            }
+            return parts.join('');
+        }
+
+        function previewOmschrijvingPlain(text) {
+            return String(text || '').replace(/\[([^\]]+)\]\(([^)\s]+)\)/g, '$1');
+        }
+
         function parseMarkupLine(line) {
             let match = line.match(/^#\s+(.*)$/);
             if (match) return { type: 'h1', text: match[1] };
@@ -2894,11 +3008,11 @@
 
             const headerCells = splitTableCells(bodyRows[0]);
             const dataRows = bodyRows.slice(1);
-            const headHtml = `<tr>${headerCells.map(cell => `<th>${escapeOmsHtml(cell)}</th>`).join('')}</tr>`;
+            const headHtml = `<tr>${headerCells.map(cell => `<th>${renderInlineMarkup(cell)}</th>`).join('')}</tr>`;
             const bodyHtml = dataRows.map(row => {
                 const cells = splitTableCells(row);
                 while (cells.length < headerCells.length) cells.push('');
-                return `<tr>${cells.slice(0, headerCells.length).map(cell => `<td>${escapeOmsHtml(cell)}</td>`).join('')}</tr>`;
+                return `<tr>${cells.slice(0, headerCells.length).map(cell => `<td>${renderInlineMarkup(cell)}</td>`).join('')}</tr>`;
             }).join('');
 
             return `<div class="oms-visual-table-wrap"><table class="oms-visual-table"><thead>${headHtml}</thead><tbody>${bodyHtml}</tbody></table></div>`;
@@ -2968,6 +3082,61 @@
             insertTextInOmschrijving(formatOmschrijvingDateTime());
         }
 
+        function getOmschrijvingSelection() {
+            if (omschrijvingMode === 'visual') return '';
+            if (omsCmView && typeof omsCmView.getSelection === 'function') {
+                return omsCmView.getSelection();
+            }
+            return '';
+        }
+
+        function formatOmschrijvingLink(label, url) {
+            const href = sanitizeOmsUrl(url);
+            if (!href) return '';
+            const display = String(label || '').replace(/[\[\]]/g, '').trim() || href;
+            return `[${display}](${href})`;
+        }
+
+        function closeOmschrijvingLinkModal() {
+            document.getElementById('oms-link-modal')?.classList.add('hidden');
+        }
+
+        function openOmschrijvingLinkModal() {
+            if (omschrijvingMode === 'visual') {
+                setOmschrijvingMode('markup');
+            }
+
+            const selection = getOmschrijvingSelection().trim();
+            const labelInput = document.getElementById('oms-link-label');
+            const urlInput = document.getElementById('oms-link-url');
+            if (looksLikeOmsUrl(selection)) {
+                labelInput.value = '';
+                urlInput.value = selection;
+            } else {
+                labelInput.value = selection;
+                urlInput.value = '';
+            }
+
+            document.getElementById('oms-link-modal').classList.remove('hidden');
+            setTimeout(() => {
+                (labelInput.value && !urlInput.value ? urlInput : labelInput).focus();
+            }, 0);
+        }
+
+        function submitOmschrijvingLink(event) {
+            event.preventDefault();
+            const label = document.getElementById('oms-link-label').value;
+            const url = document.getElementById('oms-link-url').value;
+            const markup = formatOmschrijvingLink(label, url);
+            if (!markup) {
+                showToast('Ongeldige URL', 'Gebruik een http(s)- of mailto-link.', 'error');
+                document.getElementById('oms-link-url').focus();
+                return;
+            }
+            insertTextInOmschrijving(markup);
+            closeOmschrijvingLinkModal();
+        }
+
         function renderOmschrijvingVisual() {
             const markup = getOmschrijvingMarkup();
             const lines = markup.split('\n');
@@ -2993,7 +3162,7 @@
                     continue;
                 }
 
-                const text = escapeOmsHtml(parsed.text);
+                const text = renderInlineMarkup(parsed.text);
                 if (parsed.type === 'h1') {
                     parts.push(`<div class="oms-visual-line"><span class="oms-visual-h1">${text || '&nbsp;'}</span></div>`);
                 } else if (parsed.type === 'check') {
@@ -3059,7 +3228,16 @@
             document.getElementById('btn-omschrijving-h1').addEventListener('click', insertOmschrijvingHeader1);
             document.getElementById('btn-omschrijving-table').addEventListener('click', insertOmschrijvingTable);
             document.getElementById('btn-omschrijving-datetime').addEventListener('click', insertOmschrijvingDateTime);
+            document.getElementById('btn-omschrijving-link').addEventListener('click', openOmschrijvingLinkModal);
             btnOmschrijvingMode.addEventListener('click', toggleOmschrijvingMode);
+
+            const linkModal = document.getElementById('oms-link-modal');
+            document.getElementById('oms-link-form').addEventListener('submit', submitOmschrijvingLink);
+            document.getElementById('oms-link-close').addEventListener('click', closeOmschrijvingLinkModal);
+            document.getElementById('oms-link-cancel').addEventListener('click', closeOmschrijvingLinkModal);
+            linkModal.addEventListener('click', (e) => {
+                if (e.target === linkModal) closeOmschrijvingLinkModal();
+            });
 
             omschrijvingVisual.addEventListener('click', (e) => {
                 const check = e.target.closest('.oms-visual-check');
@@ -3073,7 +3251,7 @@
                 showToast('Fout', 'CodeMirror kon niet geladen worden.', 'error');
                 const fallback = document.createElement('textarea');
                 fallback.className = 'w-full min-h-[27rem] bg-transparent border-0 px-3 py-2 text-white font-mono text-sm focus:outline-none resize-y';
-                fallback.placeholder = 'Markup: # kop, tabel, gewone tekst, • bullets, [ ] en [x] afvinkvakjes';
+                fallback.placeholder = 'Markup: # kop, tabel, [tekst](url), gewone tekst, • bullets, [ ] en [x] afvinkvakjes';
                 fallback.addEventListener('input', () => {
                     omschrijvingHidden.value = fallback.value;
                 });
@@ -3081,6 +3259,7 @@
                 omsCmView = {
                     getValue: () => fallback.value,
                     setValue: (v) => { fallback.value = v || ''; },
+                    getSelection: () => fallback.value.slice(fallback.selectionStart || 0, fallback.selectionEnd || 0),
                     replaceSelection: (text) => {
                         const start = fallback.selectionStart || 0;
                         const end = fallback.selectionEnd || 0;

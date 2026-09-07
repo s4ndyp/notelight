@@ -1125,6 +1125,11 @@
     }
 
     function closeTopModal() {
+        const omsLink = document.getElementById('oms-link-modal');
+        if (omsLink && !omsLink.classList.contains('hidden')) {
+            omsLink.classList.add('hidden');
+            return;
+        }
         const choiceAdd = document.getElementById('choice-add-modal');
         if (choiceAdd && !choiceAdd.classList.contains('hidden')) {
             choiceAdd.classList.add('hidden');
